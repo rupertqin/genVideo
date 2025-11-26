@@ -8,14 +8,15 @@ import subprocess
 
 def create_slideshow(image_paths, audio_path, output_path,
                      duration_per_image=5, transition_duration=1,
-                     img_size=(1280, 720), fps=24):
+                     img_size=(1280, 720), fps=24, audio_duration=0):
     """
     创建新版 MoviePy 的渐变轮播视频
 
     参数说明与旧版一致，但内部实现适配 v2.x API
     """
-    # 用 ffmpeg 获取音频时长（更准确）
-    audio_duration = get_audio_duration_ffmpeg(audio_path)
+    if not audio_duration or audio_duration <= 0:
+        audio_duration = get_audio_duration_ffmpeg(audio_path)
+    print(f"音频时长: {audio_duration} 秒 (使用音频文件: {audio_path})")
     audio = AudioFileClip(audio_path)
 
     # 计算每张图片显示时长和循环次数，确保视频时长与音频完全一致
@@ -130,14 +131,12 @@ if __name__ == "__main__":
 
     OUTPUT_PATH = "generated.mp4"
 
-    # audio_duration = get_audio_duration_ffmpeg(AUDIO_PATH)
-    audio_duration = 30
-    print(f"音频时长: {audio_duration} 秒 (使用音频文件: {AUDIO_PATH})")
 
     create_slideshow(
         image_paths=IMAGE_PATHS,
         audio_path=AUDIO_PATH,
         output_path=OUTPUT_PATH,
+        audio_duration=30,
         duration_per_image=3,
         transition_duration=1,
         img_size=(720, 1280),
