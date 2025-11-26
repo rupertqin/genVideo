@@ -130,15 +130,16 @@ if __name__ == "__main__":
 
     OUTPUT_PATH = "generated.mp4"
 
-    audio_duration = get_audio_duration_ffmpeg(AUDIO_PATH)
+    # audio_duration = get_audio_duration_ffmpeg(AUDIO_PATH)
+    audio_duration = 30
     print(f"音频时长: {audio_duration} 秒 (使用音频文件: {AUDIO_PATH})")
 
     create_slideshow(
         image_paths=IMAGE_PATHS,
         audio_path=AUDIO_PATH,
         output_path=OUTPUT_PATH,
-        duration_per_image=5,
+        duration_per_image=3,
         transition_duration=1,
-        img_size=(1920, 1080),
-        fps=30
+        img_size=(720, 1280),
+        fps=24
     )
