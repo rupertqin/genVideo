@@ -2,7 +2,7 @@
 视频生成主脚本
 使用 moviepy 创建图片轮播视频，支持音频配合和过渡效果
 """
-from moviepy import ImageClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
+from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 from moviepy.video.fx import FadeIn, FadeOut
 import os
 
@@ -10,6 +10,7 @@ import os
 from utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
 from utils.image_utils import get_image_paths, get_audio_path
 from utils.slideshow_utils import SlideshowController
+from utils.video_utils import resize_and_position_image
 
 
 def create_slideshow(image_paths, audio_path, output_path,
@@ -74,14 +75,14 @@ def create_slideshow(image_paths, audio_path, output_path,
             duration += transition_duration
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"图片不存在: {img_path}")
+
+        # 创建图片片段
         clip = ImageClip(img_path, duration=duration)
-        video_w, video_h = img_size
-        img_w, img_h = clip.size
-        scale = max(video_w / img_w, video_h / img_h)
-        new_w, new_h = int(img_w * scale), int(img_h * scale)
-        clip = clip.resized(new_size=(new_w, new_h))
-        clip = clip.with_position(("center", "center"))
-        clip = CompositeVideoClip([clip], size=img_size)
+
+        # 使用工具函数处理图片尺寸和位置
+        clip = resize_and_position_image(clip, img_size, position="center")
+
+        # 添加过渡效果
         effects = []
         if i > 0:
             effects.append(FadeIn(duration=transition_duration))
