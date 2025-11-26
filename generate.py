@@ -8,7 +8,7 @@ import subprocess
 
 def create_slideshow(image_paths, audio_path, output_path,
                      duration_per_image=5, transition_duration=1,
-                     img_size=(1280, 720), fps=24, audio_duration=0):
+                     img_size=(1280, 720), fps=30, audio_duration=0):
     """
     创建新版 MoviePy 的渐变轮播视频
 
@@ -18,6 +18,8 @@ def create_slideshow(image_paths, audio_path, output_path,
         audio_duration = get_audio_duration_ffmpeg(audio_path)
     print(f"音频时长: {audio_duration} 秒 (使用音频文件: {audio_path})")
     audio = AudioFileClip(audio_path)
+    if audio_duration and audio_duration > 0:
+        audio = audio.subclipped(0, audio_duration)
 
     # 计算每张图片显示时长和循环次数，确保视频时长与音频完全一致
     n_images = len(image_paths)
@@ -31,6 +33,8 @@ def create_slideshow(image_paths, audio_path, output_path,
     # 最后一张图片的时长用剩余音频时长补齐
     durations = [duration_per_image] * (len(repeated_images) - 1)
     last_img_duration = audio_duration - duration_per_image * (len(repeated_images) - 1)
+    overlap_total = transition_duration * (len(repeated_images) - 1)
+    last_img_duration += overlap_total
     durations.append(last_img_duration)
 
     clips = []
@@ -61,6 +65,7 @@ def create_slideshow(image_paths, audio_path, output_path,
     )
 
     final_video = final_video.with_audio(audio)
+    final_video = final_video.subclipped(0, audio_duration)
 
     final_video.write_videofile(
         output_path,
