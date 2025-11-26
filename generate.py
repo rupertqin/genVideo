@@ -1,3 +1,48 @@
+class SlideshowController:
+    """
+    控制图片轮播切换，按 change_points 切换图片。
+    """
+    def __init__(self, image_paths, change_points):
+        self.image_paths = image_paths
+        self.change_points = change_points
+        self.n_images = len(image_paths)
+        self.idx = 0
+        self.time = 0.0
+
+    def next(self):
+        """
+        切换到下一个图片，返回图片路径和当前时间区间。
+        """
+        if self.idx >= len(self.change_points) - 1:
+            return None  # 已到结尾
+        img_path = self.image_paths[self.idx % self.n_images]
+        start = self.change_points[self.idx]
+        end = self.change_points[self.idx + 1]
+        self.idx += 1
+        return img_path, start, end
+def get_audio_pauses(audio_path, min_pause=0.5):
+    """
+    使用 ffmpeg 的 silencedetect 检测音频静音区间，返回停顿时间点集合。
+    只有停顿时长 >= min_pause 才计入。
+    返回值：停顿结束时间点列表（单位：秒）
+    """
+    import re
+    cmd = [
+        "ffmpeg", "-i", audio_path,
+        "-af", f"silencedetect=noise=-36dB:d={min_pause}",
+        "-f", "null", "-"
+    ]
+    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    output = result.stdout.decode(errors="ignore")
+    # 匹配 silence_start/silence_end
+    silence_starts = [float(m.group(1)) for m in re.finditer(r"silence_start: ([\d\.]+)", output)]
+    silence_durations = [float(m.group(1)) for m in re.finditer(r"silence_duration: ([\d\.]+)", output)]
+    # 只保留停顿时长 >= min_pause 的停顿开始点
+    pauses = []
+    for start, dur in zip(silence_starts, silence_durations):
+        if dur >= min_pause:
+            pauses.append(start)
+    return pauses
 # import moviepy
 # print(f"Version: {moviepy.__version__}")  # 应 ≥2.0.0
 from moviepy import ImageClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
@@ -21,27 +66,37 @@ def create_slideshow(image_paths, audio_path, output_path,
     if audio_duration and audio_duration > 0:
         audio = audio.subclipped(0, audio_duration)
 
-    # 计算每张图片显示时长和循环次数，确保视频时长与音频完全一致
+    # 检测音频停顿点
+    pause_points = get_audio_pauses(audio_path, min_pause=0.7)
+    print(f"检测到停顿点: {pause_points}")
+    # 构造切换时间点序列
+    change_points = [0.0] + pause_points + [audio_duration]
+    # 可选：演示 next 控制逻辑
+    controller = SlideshowController(image_paths, change_points)
+    print("轮播切换顺序:")
+    while True:
+        result = controller.next()
+        if result is None:
+            break
+        img_path, start, end = result
+        print(f"图片: {os.path.basename(img_path)} | 时间区间: {start:.2f} - {end:.2f}")
     n_images = len(image_paths)
-    repeated_images = []
-    total_duration = 0.0
-    idx = 0
-    while total_duration < audio_duration:
-        repeated_images.append(image_paths[idx % n_images])
-        total_duration += duration_per_image
-        idx += 1
-    # 最后一张图片的时长用剩余音频时长补齐
-    durations = [duration_per_image] * (len(repeated_images) - 1)
-    last_img_duration = audio_duration - duration_per_image * (len(repeated_images) - 1)
-    overlap_total = transition_duration * (len(repeated_images) - 1)
-    last_img_duration += overlap_total
-    durations.append(last_img_duration)
-
     clips = []
-    for i, (img_path, img_duration) in enumerate(zip(repeated_images, durations)):
+    for i in range(len(change_points)-1):
+        img_path = image_paths[i % n_images]
+        start = change_points[i]
+        end = change_points[i+1]
+        # 基本时长为相邻 change_points 之间的间隔
+        duration = end - start
+        # 由于使用了 padding=-transition_duration（让片段重叠做过渡），
+        # 如果不补偿，后续片段会提前 start transition_duration * 累计 次数。
+        # 为了让视觉切换严格在 change_points 上发生，需要对除最后一段外的片段
+        # 将时长增加 transition_duration，这样在拼接时被 padding 抵消。
+        if i < len(change_points) - 2 and transition_duration > 0:
+            duration += transition_duration
         if not os.path.exists(img_path):
             raise FileNotFoundError(f"图片不存在: {img_path}")
-        clip = ImageClip(img_path, duration=img_duration)
+        clip = ImageClip(img_path, duration=duration)
         video_w, video_h = img_size
         img_w, img_h = clip.size
         scale = max(video_w / img_w, video_h / img_h)
@@ -52,21 +107,20 @@ def create_slideshow(image_paths, audio_path, output_path,
         effects = []
         if i > 0:
             effects.append(FadeIn(duration=transition_duration))
-        if i < len(repeated_images) - 1:
+        if i < len(change_points) - 2:
             effects.append(FadeOut(duration=transition_duration))
         if effects:
             clip = clip.with_effects(effects)
         clips.append(clip)
-
     final_video = concatenate_videoclips(
         clips,
         method="compose",
         padding=-transition_duration
     )
-
     final_video = final_video.with_audio(audio)
-    final_video = final_video.subclipped(0, audio_duration)
-
+    print(f"最终视频时长: {final_video.duration}, 目标音频时长: {audio_duration}")
+    clip_end = min(audio_duration, final_video.duration)
+    final_video = final_video.subclipped(0, clip_end)
     final_video.write_videofile(
         output_path,
         fps=fps,
@@ -141,7 +195,7 @@ if __name__ == "__main__":
         image_paths=IMAGE_PATHS,
         audio_path=AUDIO_PATH,
         output_path=OUTPUT_PATH,
-        audio_duration=30,
+        audio_duration=0,
         duration_per_image=3,
         transition_duration=1,
         img_size=(720, 1280),
