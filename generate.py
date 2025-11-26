@@ -134,6 +134,6 @@ if __name__ == "__main__":
         audio_duration=0,
         duration_per_image=3,
         transition_duration=1,
-        img_size=(720, 1280),
+        img_size=(1280, 720),
         fps=24
     )
