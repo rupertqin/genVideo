@@ -1,54 +1,15 @@
-class SlideshowController:
-    """
-    控制图片轮播切换，按 change_points 切换图片。
-    """
-    def __init__(self, image_paths, change_points):
-        self.image_paths = image_paths
-        self.change_points = change_points
-        self.n_images = len(image_paths)
-        self.idx = 0
-        self.time = 0.0
-
-    def next(self):
-        """
-        切换到下一个图片，返回图片路径和当前时间区间。
-        """
-        if self.idx >= len(self.change_points) - 1:
-            return None  # 已到结尾
-        img_path = self.image_paths[self.idx % self.n_images]
-        start = self.change_points[self.idx]
-        end = self.change_points[self.idx + 1]
-        self.idx += 1
-        return img_path, start, end
-def get_audio_pauses(audio_path, min_pause=0.5):
-    """
-    使用 ffmpeg 的 silencedetect 检测音频静音区间，返回停顿时间点集合。
-    只有停顿时长 >= min_pause 才计入。
-    返回值：停顿结束时间点列表（单位：秒）
-    """
-    import re
-    cmd = [
-        "ffmpeg", "-i", audio_path,
-        "-af", f"silencedetect=noise=-36dB:d={min_pause}",
-        "-f", "null", "-"
-    ]
-    result = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    output = result.stdout.decode(errors="ignore")
-    # 匹配 silence_start/silence_end
-    silence_starts = [float(m.group(1)) for m in re.finditer(r"silence_start: ([\d\.]+)", output)]
-    silence_durations = [float(m.group(1)) for m in re.finditer(r"silence_duration: ([\d\.]+)", output)]
-    # 只保留停顿时长 >= min_pause 的停顿开始点
-    pauses = []
-    for start, dur in zip(silence_starts, silence_durations):
-        if dur >= min_pause:
-            pauses.append(start)
-    return pauses
-# import moviepy
-# print(f"Version: {moviepy.__version__}")  # 应 ≥2.0.0
+"""
+视频生成主脚本
+使用 moviepy 创建图片轮播视频，支持音频配合和过渡效果
+"""
 from moviepy import ImageClip, AudioFileClip, CompositeVideoClip, concatenate_videoclips
 from moviepy.video.fx import FadeIn, FadeOut
 import os
-import subprocess
+
+# 导入工具模块
+from utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
+from utils.image_utils import get_image_paths, get_audio_path
+from utils.slideshow_utils import SlideshowController
 
 
 def create_slideshow(image_paths, audio_path, output_path,
@@ -57,7 +18,17 @@ def create_slideshow(image_paths, audio_path, output_path,
     """
     创建新版 MoviePy 的渐变轮播视频
 
-    参数说明与旧版一致，但内部实现适配 v2.x API
+    参数说明:
+        image_paths (list): 图片文件路径列表
+        audio_path (str): 音频文件路径
+        output_path (str): 输出视频文件路径
+        duration_per_image (int): 每张图片的显示时长（秒）
+        transition_duration (int): 过渡效果时长（秒）
+        img_size (tuple): 输出视频分辨率 (width, height)
+        fps (int): 视频帧率
+        audio_duration (float): 目标音频时长，0表示使用原始音频时长
+
+    内部实现适配 v2.x API
     """
     if not audio_duration or audio_duration <= 0:
         audio_duration = get_audio_duration_ffmpeg(audio_path)
@@ -71,7 +42,8 @@ def create_slideshow(image_paths, audio_path, output_path,
     print(f"检测到停顿点: {pause_points}")
     # 构造切换时间点序列
     change_points = [0.0] + pause_points + [audio_duration]
-    # 可选：演示 next 控制逻辑
+
+    # 使用轮播控制器
     controller = SlideshowController(image_paths, change_points)
     print("轮播切换顺序:")
     while True:
@@ -80,7 +52,13 @@ def create_slideshow(image_paths, audio_path, output_path,
             break
         img_path, start, end = result
         print(f"图片: {os.path.basename(img_path)} | 时间区间: {start:.2f} - {end:.2f}")
+
     n_images = len(image_paths)
+    if n_images == 0:
+        raise FileNotFoundError("未提供任何图片，无法生成轮播视频。请在 `images` 目录添加图片。")
+    if n_images < len(change_points) - 1:
+        print(f"图片数量 ({n_images}) 少于切换点数量 ({len(change_points)-1})，将循环使用图片以覆盖所有切换点。")
+
     clips = []
     for i in range(len(change_points)-1):
         img_path = image_paths[i % n_images]
@@ -112,6 +90,7 @@ def create_slideshow(image_paths, audio_path, output_path,
         if effects:
             clip = clip.with_effects(effects)
         clips.append(clip)
+
     final_video = concatenate_videoclips(
         clips,
         method="compose",
@@ -130,66 +109,22 @@ def create_slideshow(image_paths, audio_path, output_path,
     )
     print(f"视频生成成功: {output_path}")
 
-def get_audio_duration_ffmpeg(audio_path):
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error", "-show_entries",
-            "format=duration", "-of",
-            "default=noprint_wrappers=1:nokey=1", audio_path
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT
-    )
-    # Decode ffprobe output and handle possible errors
-    output = result.stdout.decode().strip() if result.stdout else ""
-    try:
-        return float(output)
-    except Exception:
-        raise RuntimeError(f"无法获取音频时长（ffprobe 输出）：{output}")
 
 if __name__ == "__main__":
     # 示例配置（需替换实际路径）
     IMAGE_DIR = "images"
-    def get_image_paths(dir_path):
-        """Return image file paths from `dir_path` in filesystem read order.
+    OUTPUT_PATH = "generated.mp4"
 
-        Note: the user indicated images may be unordered; we keep the
-        directory reading order (no explicit sorting).
-        """
-        exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"}
-        try:
-            names = os.listdir(dir_path)
-        except FileNotFoundError:
-            return []
-        paths = [os.path.join(dir_path, name) for name in names
-                 if os.path.splitext(name)[1].lower() in exts]
-        return paths
-
+    # 使用工具函数获取资源路径
     IMAGE_PATHS = get_image_paths(IMAGE_DIR)
     if not IMAGE_PATHS:
         print(f"未在目录 `{IMAGE_DIR}` 中找到图片，请检查路径。")
         raise SystemExit(1)
 
-    def get_audio_path():
-        """Return existing audio file path. Prefer WAV over MP3.
-
-        Looks in the current working directory for `audio.wav` then
-        `audio.mp3` and returns the first match. Returns `None` if
-        neither exists.
-        """
-        candidates = ["audio.wav", "audio.mp3"]
-        for name in candidates:
-            if os.path.exists(name):
-                return name
-        return None
-
     AUDIO_PATH = get_audio_path()
     if not AUDIO_PATH:
         print("未找到 `audio.wav` 或 `audio.mp3`，请在项目根目录放置音频文件（或修改脚本）。")
         raise SystemExit(1)
-
-    OUTPUT_PATH = "generated.mp4"
-
 
     create_slideshow(
         image_paths=IMAGE_PATHS,
