@@ -11,11 +11,13 @@ from utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
 from utils.image_utils import get_image_paths, get_audio_path
 from utils.slideshow_utils import SlideshowController
 from utils.video_utils import resize_and_position_image
+from utils.animation_utils import AnimationConfig, apply_animation, get_random_animation_config
 
 
 def create_slideshow(image_paths, audio_path, output_path,
                      duration_per_image=5, transition_duration=1,
-                     img_size=(1280, 720), fps=30, audio_duration=0):
+                     img_size=(1280, 720), fps=30, audio_duration=0,
+                     animation_config=None, random_animation=False):
     """
     创建新版 MoviePy 的渐变轮播视频
 
@@ -28,6 +30,8 @@ def create_slideshow(image_paths, audio_path, output_path,
         img_size (tuple): 输出视频分辨率 (width, height)
         fps (int): 视频帧率
         audio_duration (float): 目标音频时长，0表示使用原始音频时长
+        animation_config (AnimationConfig): 动画配置对象，None 表示无动画
+        random_animation (bool): 是否为每张图片随机选择动画效果
 
     内部实现适配 v2.x API
     """
@@ -79,8 +83,16 @@ def create_slideshow(image_paths, audio_path, output_path,
         # 创建图片片段
         clip = ImageClip(img_path, duration=duration)
 
-        # 使用工具函数处理图片尺寸和位置
-        clip = resize_and_position_image(clip, img_size, position="center")
+        # 应用动画效果（动画函数内部会处理缩放和位置）
+        if random_animation:
+            current_animation = get_random_animation_config(intensity=0.15, easing="ease_in_out_quad")
+            clip = apply_animation(clip, current_animation, img_size)
+            print(f"  动画: {current_animation.animation_type}")
+        elif animation_config:
+            clip = apply_animation(clip, animation_config, img_size)
+        else:
+            # 无动画时使用标准的缩放和位置处理
+            clip = resize_and_position_image(clip, img_size, position="center")
 
         # 添加过渡效果
         effects = []
@@ -127,6 +139,21 @@ if __name__ == "__main__":
         print("未找到 `audio.wav` 或 `audio.mp3`，请在项目根目录放置音频文件（或修改脚本）。")
         raise SystemExit(1)
 
+    # 动画配置示例
+    # 选项1: 使用固定动画效果
+    # animation = AnimationConfig(
+    #     animation_type=AnimationConfig.ZOOM_IN,
+    #     intensity=0.15,
+    #     easing="ease_in_out_quad"
+    # )
+
+    # 选项2: 每张图片随机动画效果（推荐）
+    # random_animation = True
+
+    # 选项3: 不使用动画
+    animation = None
+    random_animation = True  # 启用随机动画
+
     create_slideshow(
         image_paths=IMAGE_PATHS,
         audio_path=AUDIO_PATH,
@@ -134,6 +161,8 @@ if __name__ == "__main__":
         audio_duration=0,
         duration_per_image=3,
         transition_duration=1,
-        img_size=(1280, 720),
-        fps=24
+        img_size=(720, 1280),
+        fps=24,
+        animation_config=animation,
+        random_animation=random_animation
     )
