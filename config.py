@@ -7,16 +7,24 @@
 class VideoSize:
     """视频尺寸预设类"""
 
+    # 测试尺寸（快速预览）
+    TEST_TINY = (320, 240)          # 极小测试尺寸
+    TEST_SMALL = (480, 360)         # 小测试尺寸
+    TEST_MEDIUM = (640, 480)        # 中等测试尺寸
+
     # 横屏尺寸
     HD_720P = (1280, 720)           # 720P 高清
     FULL_HD_1080P = (1920, 1080)    # 1080P 全高清
     UHD_4K = (3840, 2160)           # 4K 超高清
 
     # 竖屏尺寸（适合抖音、快手等短视频平台）
+    PORTRAIT_SMALL = (180, 320)      # 竖屏测试尺寸
+    PORTRAIT_TEST = (360, 640)      # 竖屏测试尺寸
     PORTRAIT_720P = (720, 1280)     # 竖屏 720P
     PORTRAIT_1080P = (1080, 1920)   # 竖屏 1080P
 
     # 方形尺寸（适合 Instagram 等）
+    SQUARE_TEST = (480, 480)        # 方形测试尺寸
     SQUARE_720 = (720, 720)         # 方形 720
     SQUARE_1080 = (1080, 1080)      # 方形 1080
 
@@ -109,9 +117,10 @@ def print_available_sizes():
 
     # 分类显示
     categories = {
+        "测试尺寸": ["TEST_TINY", "TEST_SMALL", "TEST_MEDIUM"],
         "横屏尺寸": ["HD_720P", "FULL_HD_1080P", "UHD_4K", "WIDESCREEN_2K", "CINEMA_4K"],
-        "竖屏尺寸": ["PORTRAIT_720P", "PORTRAIT_1080P"],
-        "方形尺寸": ["SQUARE_720", "SQUARE_1080"],
+        "竖屏尺寸": ["PORTRAIT_TEST", "PORTRAIT_720P", "PORTRAIT_1080P"],
+        "方形尺寸": ["SQUARE_TEST", "SQUARE_720", "SQUARE_1080"],
     }
 
     for category, preset_names in categories.items():
