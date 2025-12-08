@@ -12,11 +12,12 @@ from utils.image_utils import get_image_paths, get_audio_path
 from utils.slideshow_utils import SlideshowController
 from utils.video_utils import resize_and_position_image
 from utils.animation_utils import AnimationConfig, apply_animation, get_random_animation_config
+from utils.video_config import VideoSize, parse_video_size, print_available_sizes
 
 
 def create_slideshow(image_paths, audio_path, output_path,
                      duration_per_image=5, transition_duration=1,
-                     img_size=(1280, 720), fps=30, audio_duration=0,
+                     stage_size=(1280, 720), fps=30, audio_duration=0,
                      animation_config=None, random_animation=False):
     """
     创建新版 MoviePy 的渐变轮播视频
@@ -27,7 +28,10 @@ def create_slideshow(image_paths, audio_path, output_path,
         output_path (str): 输出视频文件路径
         duration_per_image (int): 每张图片的显示时长（秒）
         transition_duration (int): 过渡效果时长（秒）
-        img_size (tuple): 输出视频分辨率 (width, height)
+        stage_size: 输出视频分辨率，支持以下格式：
+            - tuple: (width, height)，如 (1280, 720)
+            - str: 预设名称，如 'HD_720P', 'PORTRAIT_1080P'
+            - str: 格式 'WIDTHxHEIGHT'，如 '1280x720'
         fps (int): 视频帧率
         audio_duration (float): 目标音频时长，0表示使用原始音频时长
         animation_config (AnimationConfig): 动画配置对象，None 表示无动画
@@ -35,6 +39,10 @@ def create_slideshow(image_paths, audio_path, output_path,
 
     内部实现适配 v2.x API
     """
+    # 解析视频尺寸
+    stage_size = parse_video_size(stage_size)
+    print(f"视频尺寸: {stage_size[0]} x {stage_size[1]}")
+
     if not audio_duration or audio_duration <= 0:
         audio_duration = get_audio_duration_ffmpeg(audio_path)
     print(f"音频时长: {audio_duration} 秒 (使用音频文件: {audio_path})")
@@ -86,13 +94,13 @@ def create_slideshow(image_paths, audio_path, output_path,
         # 应用动画效果（动画函数内部会处理缩放和位置）
         if random_animation:
             current_animation = get_random_animation_config(intensity=0.15, easing="ease_in_out_quad")
-            clip = apply_animation(clip, current_animation, img_size)
+            clip = apply_animation(clip, current_animation, stage_size)
             print(f"  动画: {current_animation.animation_type}")
         elif animation_config:
-            clip = apply_animation(clip, animation_config, img_size)
+            clip = apply_animation(clip, animation_config, stage_size)
         else:
             # 无动画时使用标准的缩放和位置处理
-            clip = resize_and_position_image(clip, img_size, position="center")
+            clip = resize_and_position_image(clip, stage_size, position="center")
 
         # 添加过渡效果
         effects = []
@@ -139,6 +147,24 @@ if __name__ == "__main__":
         print("未找到 `audio.wav` 或 `audio.mp3`，请在项目根目录放置音频文件（或修改脚本）。")
         raise SystemExit(1)
 
+    # 视频尺寸配置
+    # 方式1: 使用预设尺寸（推荐）
+    STAGE_SIZE = VideoSize.PORTRAIT_720P  # 竖屏 1080P
+    # STAGE_SIZE = VideoSize.HD_720P        # 横屏 720P
+    # STAGE_SIZE = VideoSize.SQUARE_1080    # 方形 1080
+
+    # 方式2: 使用字符串预设名称
+    # STAGE_SIZE = 'PORTRAIT_1080P'
+
+    # 方式3: 使用字符串格式
+    # STAGE_SIZE = '1080x1920'
+
+    # 方式4: 直接指定尺寸
+    # STAGE_SIZE = (1080, 1920)
+
+    # 查看所有可用预设（取消注释以查看）
+    # print_available_sizes()
+
     # 动画配置示例
     # 选项1: 使用固定动画效果
     # animation = AnimationConfig(
@@ -161,7 +187,7 @@ if __name__ == "__main__":
         audio_duration=0,
         duration_per_image=3,
         transition_duration=1,
-        img_size=(720, 1280),
+        stage_size=STAGE_SIZE,
         fps=24,
         animation_config=animation,
         random_animation=random_animation
