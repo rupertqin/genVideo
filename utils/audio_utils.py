@@ -33,18 +33,20 @@ def get_audio_duration_ffmpeg(audio_path):
         raise RuntimeError(f"无法获取音频时长（PyAV）：{e}")
 
 
-def get_audio_pauses(audio_path, min_pause=0.5, noise_threshold=-35):
+def get_audio_pauses(audio_path, min_pause=0.5, noise_threshold=-35, min_interval=5.0):
     """
     使用 PyAV 检测音频静音区间，返回停顿时间点集合。
     只有停顿时长 >= min_pause 才计入。
+    过滤掉间隔小于 min_interval 的停顿点。
 
     参数:
         audio_path (str): 音频文件路径
         min_pause (float): 最小停顿时长（秒）
-        noise_threshold (float): 噪音阈值（dB），默认 -36dB
+        noise_threshold (float): 噪音阈值（dB），默认 -35dB
+        min_interval (float): 停顿点之间的最小间隔（秒），默认 5.0
 
     返回:
-        list: 停顿开始时间点列表（单位：秒）
+        list: 停顿开始时间点列表（单位：秒），已过滤间隔过小的点
     """
     pauses = []
 
@@ -118,5 +120,15 @@ def get_audio_pauses(audio_path, min_pause=0.5, noise_threshold=-35):
         import traceback
         traceback.print_exc()
         return []
+
+    # 过滤掉间隔小于 min_interval 的停顿点
+    if min_interval > 0 and len(pauses) > 0:
+        filtered_pauses = []
+        last_point = 0.0
+        for point in pauses:
+            if point - last_point >= min_interval:
+                filtered_pauses.append(point)
+                last_point = point
+        return filtered_pauses
 
     return pauses

@@ -52,9 +52,9 @@ def create_slideshow(image_paths, audio_path, output_path,
     if audio_duration and audio_duration > 0:
         audio = audio.subclipped(0, audio_duration)
 
-    # 检测音频停顿点
-    pause_points = get_audio_pauses(audio_path, min_pause=0.7, noise_threshold=-35)
-    print(f"检测到停顿点: {pause_points}")
+    # 检测音频停顿点（自动过滤间隔小于 5 秒的停顿点）
+    pause_points = get_audio_pauses(audio_path, min_pause=0.6, noise_threshold=-35, min_interval=5.0)
+    print(f"检测到停顿点（间隔 >= 5秒）: {pause_points}")
     # 构造切换时间点序列
     change_points = [0.0] + pause_points + [audio_duration]
 

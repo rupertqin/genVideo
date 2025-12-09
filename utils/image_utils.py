@@ -13,15 +13,20 @@ def get_image_paths(dir_path):
         dir_path (str): 图片目录路径
 
     返回:
-        list: 按文件系统读取顺序排列的图片文件路径列表
+        list: 按文件名排序的图片文件路径列表
     """
     exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"}
     try:
         names = os.listdir(dir_path)
     except FileNotFoundError:
         return []
-    paths = [os.path.join(dir_path, name) for name in names
-             if os.path.splitext(name)[1].lower() in exts]
+    # 筛选图片文件
+    image_names = [name for name in names
+                   if os.path.splitext(name)[1].lower() in exts]
+    # 按文件名排序
+    image_names.sort()
+    # 生成完整路径
+    paths = [os.path.join(dir_path, name) for name in image_names]
     return paths
 
 
