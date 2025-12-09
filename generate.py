@@ -6,6 +6,7 @@ from moviepy import ImageClip, AudioFileClip, concatenate_videoclips
 from moviepy.video.fx import FadeIn, FadeOut
 import os
 import argparse
+import time
 
 # 导入工具模块
 from utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
@@ -225,6 +226,9 @@ if __name__ == "__main__":
     print(f"  动画效果: {'启用（随机）' if random_animation else '禁用'}")
     print("=" * 60)
 
+    # 记录开始时间
+    start_time = time.time()
+
     create_slideshow(
         image_paths=IMAGE_PATHS,
         audio_path=AUDIO_PATH,
@@ -237,3 +241,15 @@ if __name__ == "__main__":
         animation_config=animation,
         random_animation=random_animation
     )
+
+    # 计算总耗时
+    end_time = time.time()
+    elapsed_time = end_time - start_time
+    minutes = int(elapsed_time // 60)
+    seconds = elapsed_time % 60
+
+    print("=" * 60)
+    print(f"✓ 视频生成完成！")
+    print(f"  总耗时: {minutes} 分 {seconds:.2f} 秒")
+    print(f"  输出文件: {args.output}")
+    print("=" * 60)
