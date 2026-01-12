@@ -67,3 +67,30 @@ def create_centered_video_frame(clip, video_size):
         CompositeVideoClip: 合成后的视频片段
     """
     return CompositeVideoClip([clip], size=video_size)
+
+
+def resize_and_position_video(clip, video_size, position="center"):
+    """
+    根据目标视频尺寸调整视频大小并设置位置
+
+    参数:
+        clip (VideoClip): 视频片段对象
+        video_size (tuple): 目标视频尺寸 (width, height)
+        position (str or tuple): 位置设置，默认为 "center"
+
+    返回:
+        VideoClip: 缩放后的视频片段
+    """
+    video_w, video_h = video_size
+    clip_w, clip_h = clip.size
+
+    scale = max(video_w / clip_w, video_h / clip_h)
+    new_w, new_h = int(clip_w * scale), int(clip_h * scale)
+
+    resized_clip = clip.resized(new_size=(new_w, new_h))
+    positioned_clip = resized_clip.with_position(position)
+
+    final_clip = CompositeVideoClip([positioned_clip], size=video_size)
+    final_clip = final_clip.with_duration(clip.duration)
+    
+    return final_clip

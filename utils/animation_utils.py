@@ -163,52 +163,47 @@ def _apply_pan(clip, config, video_size, easing_func):
     """
     应用平移动画
     通过动态 position 实现平移效果
+    平移幅度基于视频画面比例，确保所有图片动画效果一致
     """
     video_w, video_h = video_size
     img_w, img_h = clip.size
 
-    # 计算缩放以确保图片覆盖视频区域（需要额外空间用于平移）
-    scale = max(video_w / img_w, video_h / img_h) * (1 + config.intensity * 0.2)
+    # 计算基础缩放比例（确保图片覆盖视频区域）
+    base_scale = max(video_w / img_w, video_h / img_h)
+    # 额外缩放提供平移空间
+    scale = base_scale * (1 + config.intensity * 0.5)
     new_w, new_h = int(img_w * scale), int(img_h * scale)
 
-    # 调整图片大小
-    resized_clip = clip.resized(new_size=(new_w, new_h))
+    # 平移幅度基于视频宽度的百分比（统一所有图片的动画效果）
+    pan_percentage = config.intensity * 0.3  # 最大移动视频宽度的30%
+    max_offset_x = video_w * pan_percentage / 2
+    max_offset_y = video_h * pan_percentage / 2
 
-    # 计算平移范围（图片超出视频区域的部分）
-    max_offset_x = (new_w - video_w) / 2
-    max_offset_y = (new_h - video_h) / 2
-
-    # 使用 with_position 的函数形式实现动态位置
     def position_func(t):
         progress = easing_func(min(t / clip.duration, 1.0))
 
-        # 计算居中位置的左上角坐标
+        # 居中位置
         center_x = (video_w - new_w) / 2
         center_y = (video_h - new_h) / 2
 
         if config.animation_type == AnimationConfig.PAN_LEFT:
-            # 从右向左平移
             x = center_x + max_offset_x * (1 - 2 * progress)
             y = center_y
         elif config.animation_type == AnimationConfig.PAN_RIGHT:
-            # 从左向右平移
             x = center_x + max_offset_x * (2 * progress - 1)
             y = center_y
         elif config.animation_type == AnimationConfig.PAN_UP:
-            # 从下向上平移
             x = center_x
             y = center_y + max_offset_y * (1 - 2 * progress)
         else:  # PAN_DOWN
-            # 从上向下平移
             x = center_x
             y = center_y + max_offset_y * (2 * progress - 1)
 
         return (x, y)
 
-    # 设置位置（动态）
+    resized_clip = clip.resized(new_size=(new_w, new_h))
     positioned_clip = resized_clip.with_position(position_func)
 
-    # 合成到指定尺寸的视频帧中
     return CompositeVideoClip([positioned_clip], size=video_size)
 
 

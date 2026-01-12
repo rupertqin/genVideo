@@ -1,13 +1,27 @@
 """
 图片和媒体文件处理工具模块
 提供图片路径获取和音频文件路径查找功能
+兼容旧版接口，内部使用 media_utils
 """
 import os
+from utils.media_utils import (
+    get_media_paths as _get_media_paths,
+    get_image_paths as _get_image_paths,
+    get_video_paths as _get_video_paths,
+    get_audio_path,
+    MediaType,
+    MediaItem,
+    IMAGE_EXTS,
+    VIDEO_EXTS,
+    is_video_file,
+    is_image_file,
+    get_media_type
+)
 
 
 def get_image_paths(dir_path):
     """
-    从指定目录获取图片文件路径集合
+    从指定目录获取图片文件路径列表
 
     参数:
         dir_path (str): 图片目录路径
@@ -15,19 +29,7 @@ def get_image_paths(dir_path):
     返回:
         list: 按文件名排序的图片文件路径列表
     """
-    exts = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tiff", ".bmp"}
-    try:
-        names = os.listdir(dir_path)
-    except FileNotFoundError:
-        return []
-    # 筛选图片文件
-    image_names = [name for name in names
-                   if os.path.splitext(name)[1].lower() in exts]
-    # 按文件名排序
-    image_names.sort()
-    # 生成完整路径
-    paths = [os.path.join(dir_path, name) for name in image_names]
-    return paths
+    return _get_image_paths(dir_path)
 
 
 def get_audio_path():

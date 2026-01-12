@@ -5,17 +5,18 @@
 [![PyAV](https://img.shields.io/badge/PyAV-10.0.0%2B-orange.svg)](https://github.com/PyAV-Org/PyAV)
 [![Test Coverage](https://img.shields.io/badge/coverage-80%25-yellow.svg)](tests/TESTING_REPORT.md)
 
-genVideo 是一个基于 MoviePy 和 PyAV 的智能图片轮播视频生成工具。它能够自动将图片、音频等素材合成为具有专业效果的轮播视频，支持多种动画过渡效果和自定义配置。
+genVideo 是一个基于 MoviePy 和 PyAV 的智能图片/视频混合轮播视频生成工具。它能够自动将图片、视频、音频等素材合成为具有专业效果的轮播视频，支持多种动画过渡效果和自定义配置。
 
 ## ✨ 主要功能
 
-- 🎬 **智能轮播**: 自动检测音频停顿点，智能分配图片展示时间
+- 🎬 **智能轮播**: 自动检测音频停顿点，智能分配媒体展示时间
+- 🖼️ **视频支持**: 支持图片和视频混合轮播，视频自动循环播放
 - 🎵 **音频同步**: 完美匹配视频与音频时长，确保音画同步
 - 🎨 **动画效果**: 支持缩放、平移等多种动画效果，可随机或固定配置
 - 🔄 **过渡效果**: 内置淡入淡出过渡，营造流畅的视觉体验
 - 📱 **多尺寸支持**: 支持横屏、竖屏、方形等多种视频尺寸预设
 - ⚡ **高性能**: 使用 PyAV 进行音频分析，避免频繁调用 ffmpeg 命令行
-- 🎯 **智能适配**: 自动循环使用图片以覆盖所有音频段落
+- 🎯 **智能适配**: 自动循环使用媒体以覆盖所有音频段落
 
 ## 📋 系统要求
 
@@ -40,7 +41,20 @@ pip install -r requirements.txt
 
 ```
 genVideo/
+├── media/           # 放置图片和视频文件
+│   ├── image1.jpg
+│   ├── image2.png
+│   └── video1.mp4
+├── audio.wav        # 音频文件 (或 audio.mp3)
+└── generate.py      # 主程序
+```
+
+或使用旧版分开的目录结构：
+
+```
+genVideo/
 ├── images/          # 放置你的图片文件 (支持 jpg, png, jpeg)
+├── videos/          # 放置视频文件 (支持 mp4, mov, avi 等)
 ├── audio.wav        # 音频文件 (或 audio.mp3)
 └── generate.py      # 主程序
 ```
@@ -67,14 +81,26 @@ python generate.py --list-sizes
 
 #### 1. 准备素材
 
-将图片文件放入 `images/` 目录，音频文件放在项目根目录（命名为 `audio.wav` 或 `audio.mp3`）。
+将媒体文件放入 `media/` 目录，音频文件放在项目根目录（命名为 `audio.wav` 或 `audio.mp3`）。
 
-支持的图片格式：
+支持的媒体格式：
 
+**图片格式**：
 - JPG/JPEG
 - PNG
-- BMP
+- GIF
+- WebP
 - TIFF
+- BMP
+
+**视频格式**：
+- MP4
+- MOV
+- AVI
+- MKV
+- WebM
+- M4V
+- FLV
 
 #### 2. 运行生成
 
@@ -130,12 +156,33 @@ python generate.py --output my_video.mp4
 python generate.py --fps 30                # 30fps（更流畅）
 python generate.py --fps 15                # 15fps（文件更小）
 
-# 指定图片目录
-python generate.py --images ./my_images
+# 指定媒体目录（支持图片和视频混合）
+python generate.py --media ./my_media
+
+# 分别指定图片和视频目录（兼容旧版）
+python generate.py --images ./my_images --videos ./my_videos
 
 # 指定音频文件
 python generate.py --audio ./my_audio.mp3
 ```
+
+#### 视频处理
+
+项目支持图片和视频混合轮播：
+
+```bash
+# 混合媒体目录（推荐）
+python generate.py --media ./media
+
+# 分别指定图片和视频目录
+python generate.py --images ./images --videos ./videos
+```
+
+视频处理特性：
+- 视频会自动循环播放以匹配分配的时长
+- 视频会统一缩放到目标分辨率
+- 图片和视频可以混合排序使用
+- 动画效果仅应用于图片（视频保持原始播放）
 
 ### 可用的视频尺寸预设
 
@@ -325,7 +372,8 @@ genVideo/
 ├── play.py               # 播放脚本（如有）
 ├── utils/                # 工具模块
 │   ├── audio_utils.py    # 音频处理工具
-│   ├── image_utils.py    # 图片处理工具
+│   ├── media_utils.py    # 媒体处理工具（图片+视频）
+│   ├── image_utils.py    # 图片处理工具（兼容旧版）
 │   ├── video_utils.py    # 视频处理工具
 │   ├── slideshow_utils.py # 轮播控制器
 │   └── animation_utils.py # 动画效果工具
