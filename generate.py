@@ -46,7 +46,9 @@ def create_slideshow(media_items, audio_path, output_path,
         audio_duration = get_audio_duration_ffmpeg(audio_path)
     print(f"音频时长: {audio_duration} 秒 (使用音频文件: {audio_path})")
     audio = AudioFileClip(audio_path)
+    actual_duration = audio.duration
     if audio_duration and audio_duration > 0:
+        audio_duration = min(audio_duration, actual_duration)
         audio = audio.subclipped(0, audio_duration)
 
     pause_points = get_audio_pauses(audio_path, min_pause=0.70, noise_threshold=-35, min_interval=5.0)
