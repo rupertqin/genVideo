@@ -109,7 +109,7 @@ def get_video_paths(dir_path):
 
 def get_audio_path():
     """
-    查找项目根目录下的音频文件
+    查找项目根目录下的音频文件（兼容旧接口）
 
     返回:
         str or None: 音频文件路径，优先查找 .wav 文件，若未找到则查找 .mp3 文件
@@ -119,6 +119,65 @@ def get_audio_path():
         if os.path.exists(name):
             return name
     return None
+
+
+# 目录里默认查找的音频文件名
+AUDIO_FILENAMES = ("audio.wav", "audio.mp3")
+
+
+def resolve_dir(configured, fallbacks=()):
+    """
+    返回第一个实际存在的目录，用于「配置目录 + 旧目录兼容」的场景。
+
+    参数:
+        configured (str): 首选目录（通常来自配置）
+        fallbacks (tuple): 备用目录列表（按顺序尝试）
+
+    返回:
+        str or None: 存在的目录路径，都不存在时返回 None
+    """
+    for path in (configured, *fallbacks):
+        if path and os.path.isdir(path):
+            return path
+    return None
+
+
+def find_audio_in(path):
+    """
+    在给定的文件或目录中查找音频文件。
+
+    参数:
+        path (str): 音频文件完整路径；或存放音频的目录（在该目录里找 audio.wav / audio.mp3）
+
+    返回:
+        str or None: 音频文件路径，未找到时返回 None
+    """
+    if not path:
+        return None
+    if os.path.isfile(path):
+        return path
+    if os.path.isdir(path):
+        for name in AUDIO_FILENAMES:
+            candidate = os.path.join(path, name)
+            if os.path.isfile(candidate):
+                return candidate
+    return None
+
+
+def ensure_parent_dir(path):
+    """
+    确保目标文件的父目录存在（输出到 output/xxx.mp4 时自动建目录）。
+
+    参数:
+        path (str): 文件路径
+
+    返回:
+        str: 父目录路径；路径中没有目录部分时返回空字符串
+    """
+    parent = os.path.dirname(path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    return parent
 
 
 def is_video_file(path: str) -> bool:

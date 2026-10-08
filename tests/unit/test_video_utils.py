@@ -1,161 +1,171 @@
 """
 video_utils.py 模块的单元测试
 """
+import numpy as np
 import pytest
 from unittest.mock import MagicMock, patch
+from moviepy import ImageClip
 
 from utils.video_utils import (
+    cover_geometry,
     resize_and_position_image,
     calculate_image_scale,
-    create_centered_video_frame
+    create_centered_video_frame,
+    fit_frame,
 )
 
 
-class TestCalculateImageScale:
-    """calculate_image_scale 函数的测试"""
+class TestCoverGeometry:
+    """cover_geometry / calculate_image_scale 的测试（覆盖式缩放）"""
 
-    def test_scale_calculation_landscape(self):
-        """测试横屏图片的缩放计算"""
-        img_size = (800, 600)
-        video_size = (1280, 720)
+    def test_landscape_source(self):
+        """横图：按宽度方向放大（取较大比例，保证铺满）"""
+        scale, new_w, new_h = cover_geometry((800, 600), (1280, 720))
+        assert scale == pytest.approx(1.6)
+        assert (new_w, new_h) == (1280, 960)
 
-        scale, new_w, new_h = calculate_image_scale(img_size, video_size)
+    def test_portrait_source(self):
+        """竖图：按宽度方向放大"""
+        scale, new_w, new_h = cover_geometry((600, 800), (1280, 720))
+        assert scale == pytest.approx(1280 / 600)
+        assert new_w == 1280
+        assert new_h >= 720
 
-        # 视频更宽，需要按高度缩放
-        expected_scale = 720 / 600  # 1.2
-        expected_w = int(800 * expected_scale)  # 960
-        expected_h = 720
+    def test_square_source(self):
+        """方图：按宽度方向放大"""
+        scale, new_w, new_h = cover_geometry((500, 500), (1280, 720))
+        assert scale == pytest.approx(2.56)
+        assert (new_w, new_h) == (1280, 1280)
 
-        assert abs(scale - expected_scale) < 0.01
-        assert new_w == expected_w
-        assert new_h == expected_h
+    def test_same_ratio(self):
+        """宽高比一致时两个方向刚好铺满"""
+        scale, new_w, new_h = cover_geometry((800, 450), (1280, 720))
+        assert scale == pytest.approx(1.6)
+        assert (new_w, new_h) == (1280, 720)
 
-    def test_scale_calculation_portrait(self):
-        """测试竖屏图片的缩放计算"""
-        img_size = (600, 800)
-        video_size = (1280, 720)
+    def test_tiny_source(self):
+        """极小图：放大到铺满"""
+        scale, new_w, new_h = cover_geometry((1, 1), (1920, 1080))
+        assert scale == pytest.approx(1920.0)
+        assert (new_w, new_h) == (1920, 1920)
 
-        scale, new_w, new_h = calculate_image_scale(img_size, video_size)
+    def test_huge_source(self):
+        """超大图：缩小到铺满"""
+        scale, new_w, new_h = cover_geometry((4000, 3000), (640, 480))
+        assert scale == pytest.approx(0.16)
+        assert (new_w, new_h) == (640, 480)
 
-        # 视频更宽，需要按高度缩放
-        expected_scale = 720 / 800  # 0.9
-        expected_w = int(600 * expected_scale)  # 540
-        expected_h = 720
+    def test_result_covers_target(self):
+        """结果尺寸两个方向都不小于目标（不会出现黑边）"""
+        for img_size in [(800, 600), (600, 800), (500, 500), (1, 1), (4000, 3000)]:
+            video_size = (1280, 720)
+            _, new_w, new_h = cover_geometry(img_size, video_size)
+            assert new_w >= video_size[0]
+            assert new_h >= video_size[1]
 
-        assert abs(scale - expected_scale) < 0.01
-        assert new_w == expected_w
-        assert new_h == expected_h
+    def test_zero_dimension_handling(self):
+        """零尺寸会抛除零错误"""
+        with pytest.raises(ZeroDivisionError):
+            calculate_image_scale((0, 600), (1280, 720))
 
-    def test_scale_calculation_square(self):
-        """测试方形图片的缩放计算"""
-        img_size = (500, 500)
-        video_size = (1280, 720)
+    def test_calculate_image_scale_matches_cover_geometry(self):
+        """calculate_image_scale 与 cover_geometry 行为一致（兼容旧接口）"""
+        assert calculate_image_scale((800, 600), (1280, 720)) == cover_geometry(
+            (800, 600), (1280, 720)
+        )
 
-        scale, new_w, new_h = calculate_image_scale(img_size, video_size)
 
-        # 按较小的比例缩放（宽度）
-        expected_scale = 1280 / 500  # 2.56
-        expected_w = 1280
-        expected_h = int(500 * expected_scale)  # 1280
+class TestFitFrame:
+    """fit_frame 函数的测试"""
 
-        assert abs(scale - expected_scale) < 0.01
-        assert new_w == expected_w
-        assert new_h == expected_h
+    def _marked_source(self, height=100, width=200):
+        """构造一张只有正中有一块白色标记的图"""
+        img = np.zeros((height, width, 3), dtype=np.uint8)
+        img[height // 2 - 5:height // 2 + 5, width // 2 - 5:width // 2 + 5] = 255
+        return img
 
-    def test_scale_calculation_same_ratio(self):
-        """测试相同宽高比的缩放计算"""
-        img_size = (800, 450)
-        video_size = (1280, 720)
+    def test_output_shape_and_dtype(self):
+        """输出尺寸等于目标尺寸，类型为 uint8"""
+        frame = fit_frame(self._marked_source(), (100, 100))
+        assert frame.shape == (100, 100, 3)
+        assert frame.dtype == np.uint8
 
-        scale, new_w, new_h = calculate_image_scale(img_size, video_size)
+    def test_center_keeps_middle_marker(self):
+        """居中裁剪保留画面中央的内容"""
+        frame = fit_frame(self._marked_source(), (100, 100), position="center")
+        assert (frame == 255).all(axis=2).sum() > 0
 
-        # 宽高比相同，应该按最小比例缩放
-        expected_scale = min(1280 / 800, 720 / 450)  # 1.6
-        expected_w = 1280
-        expected_h = 720
+    def test_left_position_keeps_left_edge(self):
+        """position=left 时输出左边缘来自源图最左侧"""
+        source = np.zeros((100, 200, 3), dtype=np.uint8)
+        source[:, 0:10] = 255  # 最左 10 像素为白
+        source[:, 190:] = 128  # 最右 10 像素为灰
 
-        assert abs(scale - expected_scale) < 0.01
-        assert new_w == expected_w
-        assert new_h == expected_h
+        frame = fit_frame(source, (100, 100), position="left")
+        assert (frame[:, 0] == 255).all()
 
-    def test_scale_calculation_edge_cases(self):
-        """测试边界情况的缩放计算"""
-        # 极小图片
-        img_size = (1, 1)
-        video_size = (1920, 1080)
-        scale, new_w, new_h = calculate_image_scale(img_size, video_size)
+        frame_right = fit_frame(source, (100, 100), position="right")
+        assert (frame_right[:, -1] == 128).all()
 
-        assert scale == 1080.0  # 按较大维度
-        assert new_w == 1080
-        assert new_h == 1080
+    def test_tuple_position(self):
+        """支持 ("left", "top") 形式的二元组位置"""
+        source = np.zeros((100, 200, 3), dtype=np.uint8)
+        source[:, 0:10] = 255
+        frame = fit_frame(source, (100, 100), position=("left", "top"))
+        assert (frame[:, 0] == 255).all()
 
-        # 极大图片
-        img_size = (4000, 3000)
-        video_size = (640, 480)
-        scale, new_w, new_h = calculate_image_scale(img_size, video_size)
+    def test_rgba_source_is_converted(self):
+        """RGBA 源图被转成 RGB"""
+        source = np.zeros((100, 100, 4), dtype=np.uint8)
+        source[..., 3] = 255
+        frame = fit_frame(source, (50, 50))
+        assert frame.shape == (50, 50, 3)
 
-        assert abs(scale - (640/4000)) < 0.01  # 按宽度缩放
-        assert new_w == 640
-        assert new_h == 480
+    def test_no_upscale_when_already_matching(self):
+        """源图与目标完全一致时不缩放"""
+        source = np.zeros((100, 100, 3), dtype=np.uint8)
+        frame = fit_frame(source, (100, 100))
+        assert frame.shape == (100, 100, 3)
 
 
 class TestResizeAndPositionImage:
     """resize_and_position_image 函数的测试"""
 
-    def test_resize_and_position_basic(self):
-        """测试基本的缩放和位置设置"""
-        # 创建模拟的 clip
-        mock_clip = MagicMock()
-        mock_clip.size = (800, 600)
+    def _clip(self, height=60, width=80, duration=2.0):
+        source = np.random.default_rng(0).integers(
+            0, 255, (height, width, 3), dtype=np.uint8
+        )
+        return ImageClip(source, duration=duration)
 
-        # Mock 各种方法
-        mock_resized = MagicMock()
-        mock_clip.resized.return_value = mock_resized
-        mock_positioned = MagicMock()
-        mock_resized.with_position.return_value = mock_positioned
+    def test_output_size(self):
+        """返回片段的尺寸为目标尺寸"""
+        result = resize_and_position_image(self._clip(), (40, 30))
+        assert result.size == (40, 30)
 
-        video_size = (1280, 720)
+    def test_duration_preserved(self):
+        """时长与原片段一致"""
+        result = resize_and_position_image(self._clip(duration=3.5), (40, 30))
+        assert result.duration == pytest.approx(3.5)
 
-        result = resize_and_position_image(mock_clip, video_size)
+    def test_frame_shape(self):
+        """帧尺寸与目标一致"""
+        result = resize_and_position_image(self._clip(), (40, 30))
+        assert result.frame_function(0).shape == (30, 40, 3)
 
-        # 检查调用
-        mock_clip.resized.assert_called_once()
-        mock_resized.with_position.assert_called_once_with("center")
+    def test_frame_computed_once(self):
+        """同一帧被复用（静态图片不做逐帧重算）"""
+        result = resize_and_position_image(self._clip(), (40, 30))
+        first = result.frame_function(0)
+        assert result.frame_function(0) is first
+        assert result.frame_function(1.9) is first
 
-    def test_resize_and_position_custom_position(self):
-        """测试自定义位置的缩放和位置设置"""
-        mock_clip = MagicMock()
-        mock_clip.size = (800, 600)
-
-        mock_resized = MagicMock()
-        mock_clip.resized.return_value = mock_resized
-        mock_positioned = MagicMock()
-        mock_resized.with_position.return_value = mock_positioned
-
-        video_size = (1280, 720)
-        custom_position = ("left", "top")
-
-        result = resize_and_position_image(mock_clip, video_size, position=custom_position)
-
-        mock_resized.with_position.assert_called_once_with(custom_position)
-
-    @patch('utils.video_utils.CompositeVideoClip')
-    def test_resize_and_position_composition(self, mock_composite):
-        """测试最终的合成步骤"""
-        mock_clip = MagicMock()
-        mock_clip.size = (800, 600)
-
-        mock_resized = MagicMock()
-        mock_positioned = MagicMock()
-        mock_clip.resized.return_value = mock_resized
-        mock_resized.with_position.return_value = mock_positioned
-
-        video_size = (1280, 720)
-
-        result = resize_and_position_image(mock_clip, video_size)
-
-        # 检查 CompositeVideoClip 被正确调用
-        mock_composite.assert_called_once_with([mock_positioned], size=video_size)
+    def test_covers_without_letterbox(self):
+        """源图比目标更宽时，输出被铺满而不是留黑边"""
+        source = np.full((20, 200, 3), 200, dtype=np.uint8)
+        result = resize_and_position_image(ImageClip(source, duration=1.0), (40, 30))
+        frame = result.frame_function(0)
+        assert frame.shape == (30, 40, 3)
+        assert (frame > 150).all()  # 全部是源图内容，没有黑边
 
 
 class TestCreateCenteredVideoFrame:
@@ -167,9 +177,8 @@ class TestCreateCenteredVideoFrame:
         mock_clip = MagicMock()
         video_size = (1280, 720)
 
-        result = create_centered_video_frame(mock_clip, video_size)
+        create_centered_video_frame(mock_clip, video_size)
 
-        # 检查 CompositeVideoClip 被正确调用
         mock_composite.assert_called_once_with([mock_clip], size=video_size)
 
     def test_create_centered_frame_different_sizes(self):
@@ -188,52 +197,3 @@ class TestCreateCenteredVideoFrame:
                 video_size = (width, height)
                 create_centered_video_frame(mock_clip, video_size)
                 mock_composite.assert_called_once_with([mock_clip], size=video_size)
-
-    def test_integration_scenario(self):
-        """测试集成场景的模拟"""
-        # 模拟一个完整的视频处理流程
-        mock_clip = MagicMock()
-        mock_clip.size = (1024, 768)
-
-        # 模拟缩放计算
-        with patch('utils.video_utils.calculate_image_scale') as mock_calc:
-            mock_calc.return_value = (1.25, 1280, 960)
-
-            mock_resized = MagicMock()
-            mock_clip.resized.return_value = mock_resized
-
-            mock_positioned = MagicMock()
-            mock_resized.with_position.return_value = mock_positioned
-
-            # 执行处理
-            result = resize_and_position_image(mock_clip, (1280, 720))
-
-            # 验证计算被调用
-            mock_calc.assert_called_once_with((1024, 768), (1280, 720))
-
-            # 验证缩放被调用
-            mock_clip.resized.assert_called_once_with(new_size=(1280, 960))
-
-    def test_error_handling(self):
-        """测试错误处理"""
-        mock_clip = MagicMock()
-        mock_clip.size = (800, 600)
-
-        # 模拟 resize 方法抛出异常
-        mock_clip.resized.side_effect = Exception("Resize failed")
-
-        video_size = (1280, 720)
-
-        with pytest.raises(Exception):
-            resize_and_position_image(mock_clip, video_size)
-
-    def test_zero_dimension_handling(self):
-        """测试零维度的处理"""
-        mock_clip = MagicMock()
-        mock_clip.size = (0, 600)
-
-        video_size = (1280, 720)
-
-        # 这可能会引发除零错误或产生意外结果
-        with pytest.raises((ZeroDivisionError, ValueError)):
-            scale, new_w, new_h = calculate_image_scale((0, 600), video_size)

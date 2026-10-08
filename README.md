@@ -11,6 +11,7 @@ genVideo 是一个基于 MoviePy 和 PyAV 的智能图片/视频混合轮播视�
 
 - 🎬 **智能轮播**: 自动检测音频停顿点，智能分配媒体展示时间
 - 🖼️ **视频支持**: 支持图片和视频混合轮播，视频自动循环播放
+- 💬 **字幕烧录**: 基于 PyAV 解析 SRT 字幕并叠加到画面（硬字幕）
 - 🎵 **音频同步**: 完美匹配视频与音频时长，确保音画同步
 - 🎨 **动画效果**: 支持缩放、平移等多种动画效果，可随机或固定配置
 - 🔄 **过渡效果**: 内置淡入淡出过渡，营造流畅的视觉体验
@@ -39,25 +40,55 @@ pip install -r requirements.txt
 
 ### 2. 准备素材
 
-```
-genVideo/
-├── media/           # 放置图片和视频文件
-│   ├── image1.jpg
-│   ├── image2.png
-│   └── video1.mp4
-├── audio.wav        # 音频文件 (或 audio.mp3)
-└── generate.py      # 主程序
-```
-
-或使用旧版分开的目录结构：
+默认目录约定（都在 `config.yaml` 里可改）：
 
 ```
 genVideo/
-├── images/          # 放置你的图片文件 (支持 jpg, png, jpeg)
-├── videos/          # 放置视频文件 (支持 mp4, mov, avi 等)
-├── audio.wav        # 音频文件 (或 audio.mp3)
-└── generate.py      # 主程序
+├── assets/
+│   ├── images/          # 图片 (jpg, jpeg, png, gif, webp, tiff, bmp)
+│   │   ├── image1.jpg
+│   │   └── image2.png
+│   └── audio/           # 音频 audio.wav (或 audio.mp3)
+│       ├── audio.wav
+│       └── audio.srt    # 字幕与音频同名，自动配对
+├── output/              # 生成结果（自动创建）
+│   └── generated.mp4
+├── config.yaml          # 配置（目录/尺寸/帧率/编码器/字幕样式）
+└── generate.py          # 主程序
 ```
+
+**字幕与音频按文件名配对**：`assets/audio/audio.wav` 自动使用 `assets/audio/audio.srt`；
+音频叫 `第14节.wav` 就用 `第14节.srt`。名字不一致时在 `config.yaml` 写死：
+
+```yaml
+subtitle:
+  path: assets/audio/017、第14节：资产配置的真正含义.srt
+```
+
+需要图片和视频混排时，在 `config.yaml` 里加一个视频目录：
+
+```yaml
+media:
+  videos: assets/videos
+```
+
+兼容旧目录：默认的 `assets/images`、`assets/audio` 不存在时，会依次回退到
+`media/`、`images/`（图片）和项目根目录（音频），并打印提示告诉你用了哪个、怎么迁移。
+
+#### 从 CosyVoice 同步音频
+
+若音频由 CosyVoice 生成，可用脚本一键拷贝到 `assets/audio/`（源目录读取 `.env` 的 `COSYVOICE_OUTPUT`）：
+
+```bash
+# 按 .env 配置同步
+sh scripts/cp-audio.sh
+
+# 或临时指定源目录
+COSYVOICE_OUTPUT=/path/to/output sh scripts/cp-audio.sh
+```
+
+脚本会先校验 `audio.wav` 存在再拷贝（避免半套资源），并顺带同步 `audio.srt`（若存在，
+字幕会被自动识别，无需额外配置）。
 
 ### 3. 生成视频
 
@@ -81,7 +112,8 @@ python generate.py --list-sizes
 
 #### 1. 准备素材
 
-将媒体文件放入 `media/` 目录，音频文件放在项目根目录（命名为 `audio.wav` 或 `audio.mp3`）。
+将图片放入 `assets/images/`，音频放入 `assets/audio/`（命名为 `audio.wav` 或 `audio.mp3`），
+两个目录都可以在 `config.yaml` 的 `media` 区块里修改。
 
 支持的媒体格式：
 
@@ -135,16 +167,20 @@ python generate.py --size TEST_SMALL       # 480x360
 #### 动画和过渡效果
 
 ```bash
-# 启用随机动画（默认）
-python generate.py
+# 为每张图片启用随机缩放/平移动画（Ken Burns 效果）
+python generate.py --animation
 
-# 禁用所有动画
+# 不启用动画（默认行为，保留用于兼容）
 python generate.py --no-animation
 
 # 调整过渡效果时长
 python generate.py --transition 0.5        # 0.5秒过渡
 python generate.py --transition 2.0        # 2秒过渡
 ```
+
+> 动画默认**关闭**：静态图片只做一次缩放裁剪后逐帧复用，速度最快。
+> 开启 `--animation` 后，平移用纯 numpy 切片实现（几乎无额外开销），
+> 缩放需要逐帧重采样（Ken Burns 必需），编码速度会有所下降。
 
 #### 性能和输出控制
 
@@ -156,14 +192,25 @@ python generate.py --output my_video.mp4
 python generate.py --fps 30                # 30fps（更流畅）
 python generate.py --fps 15                # 15fps（文件更小）
 
-# 指定媒体目录（支持图片和视频混合）
+# 限制输出时长（同时截断音频，常用于快速试跑）
+python generate.py --duration 00:03:00        # 3 分钟
+python generate.py --duration 1:30            # 1 分 30 秒
+python generate.py --duration 90              # 90 秒
+python generate.py --duration 90s             # 带单位：90s / 3m / 1.5h
+python generate.py --duration 00:01:30.250    # 精确到毫秒
+
+# 指定图片目录
+python generate.py --images ./my_images
+
+# 指定视频目录（与图片一起轮播）
+python generate.py --videos ./my_videos
+
+# 图片和视频放在同一个目录（设置后忽略上面两项）
 python generate.py --media ./my_media
 
-# 分别指定图片和视频目录（兼容旧版）
-python generate.py --images ./my_images --videos ./my_videos
-
-# 指定音频文件
+# 指定音频：文件或目录皆可
 python generate.py --audio ./my_audio.mp3
+python generate.py --audio ./my_audio_dir
 ```
 
 #### 视频处理
@@ -171,11 +218,11 @@ python generate.py --audio ./my_audio.mp3
 项目支持图片和视频混合轮播：
 
 ```bash
-# 混合媒体目录（推荐）
-python generate.py --media ./media
-
-# 分别指定图片和视频目录
+# 图片 + 视频目录（在 config.yaml 里配好，或用参数）
 python generate.py --images ./images --videos ./videos
+
+# 图片和视频放在同一个目录
+python generate.py --media ./media
 ```
 
 视频处理特性：
@@ -184,12 +231,62 @@ python generate.py --images ./images --videos ./videos
 - 图片和视频可以混合排序使用
 - 动画效果仅应用于图片（视频保持原始播放）
 
+#### 字幕叠加（硬字幕）
+
+默认会自动查找与音频同名的字幕文件（如 `audio.wav` → `audio.srt`）并烧录到画面上；
+无需字幕时加 `--no-subtitles` 关闭。
+
+```bash
+# 自动查找并叠加同名字幕
+python generate.py
+
+# 指定字幕文件
+python generate.py --subtitles ./speech.srt
+
+# 关闭字幕
+python generate.py --no-subtitles
+
+# 调整字幕样式
+python generate.py --subtitle-size 40          # 字号（像素，默认按视频高度自适应）
+python generate.py --subtitle-bottom 0.1       # 距底部比例（默认 0.08）
+python generate.py --subtitle-font /path/to/font.ttf   # 指定字体（默认自动选系统中文字体）
+```
+
+实现说明：
+
+- 字幕解析使用 **PyAV 的 Subtitle API**（`container.streams.subtitles` + `SubtitleStream.decode2`
+  得到 `SubtitleSet`，读取 `AssSubtitle` 的文本与时间轴），无需额外第三方字幕库；
+- 渲染使用 Pillow 生成带描边与半透明底色的 RGBA 图层，再由 MoviePy 按时间区间叠加到成片；
+- 常见 PyAV 版本差异（如 16.x 的 `dialogue` 属性异常）已做回退兼容。
+
+#### 编码器与码率（性能）
+
+默认使用软件编码 `libx264`（`preset=veryfast`），跨平台、画质与体积可控。需要更快时可用硬件编码：
+
+```bash
+# macOS：VideoToolbox 硬件编码（约 1.5~2.4 倍）
+python generate.py --encoder h264_videotoolbox
+
+# 自动探测可用硬件编码器，探测不到则回退 libx264
+python generate.py --encoder auto
+
+# 软件编码速度档位（越快画质略降）
+python generate.py --preset superfast
+
+# 硬件编码器建议适当调高码率
+python generate.py --encoder h264_videotoolbox --bitrate 12000k
+```
+
+为什么硬件编码不设为默认：`h264_videotoolbox` 仅 macOS 存在（Linux/Windows 是 `h264_nvenc` / `h264_qsv` / `h264_amf`），
+直接写死会在其它平台报错；且同码率下画质与体积通常不如 libx264，输出还会随 GPU/驱动/系统版本变化、不易复现。
+因此保留 libx264 为默认，需要时用 `--encoder auto` 自动探测并回退。
+
 ### 可用的视频尺寸预设
 
 #### 横屏尺寸
 
 - `HD_720P` (1280×720) - 标准高清
-- `FULL_HD_1080P` (1920×1080) - 全高清
+- `HD_1080P` (1920×1080) - 全高清
 - `UHD_4K` (3840×2160) - 4K 超高清
 - `WIDESCREEN_2K` (2560×1440) - 2K 宽屏
 
@@ -328,6 +425,72 @@ def test_generate_video_workflow():
 
 ## ⚙️ 配置说明
 
+### config.yaml（推荐）
+
+项目根目录的 `config.yaml` 保存各项默认值，**优先级：命令行参数 > config.yaml > 代码内置默认值**。
+
+```yaml
+video:
+  size: HD_720P          # 尺寸预设或 "1280x720"
+  fps: 24                # 帧率（总帧数 = 时长 x fps，直接影响耗时）
+  duration: null         # 输出时长；null = 用完整音频（写法见下）
+  transition: 1.0        # 媒体切换过渡时长（秒）
+  encoder: libx264       # libx264 | h264_videotoolbox | ... | auto
+  preset: veryfast       # 仅 libx264 生效
+  bitrate: 5000k
+  animation: false       # 图片是否加随机缩放/平移动画
+
+media:
+  images: assets/images            # 图片目录
+  videos: null                     # 视频目录（可选）
+  dir: null                        # 混合目录（图片+视频放一起）；设置后忽略上面两项
+  audio: assets/audio/audio.wav    # 音频完整路径（写目录则在该目录里找 audio.wav/audio.mp3）
+  output: output/generated.mp4     # 输出文件（目录不存在会自动创建）
+
+subtitle:
+  enabled: true          # 是否叠加字幕
+  path: null             # null = 自动查找与音频同名的 .srt
+  font: null             # null = 自动选择系统中文字体
+  size: null             # 字号（像素）；null = 按视频高度自适应（height x 0.05）
+
+  bottom: 0.08           # 距底部高度比例
+  max_width: 0.9         # 单行最大宽度比例，超出自动折行
+  line_spacing: 1.25     # 行距倍数
+  stroke_width: 3        # 描边宽度（像素）
+
+  text_color: "#FFFFFF"  # "#RRGGBB" / "#RRGGBBAA" / [r, g, b]
+  box_color: [0, 0, 0]   # 文字底色
+  box_alpha: 150         # 底色透明度 0-255（0 = 只描边不画底色）
+```
+
+**输出时长** `video.duration` 支持多种写法（可精确到毫秒），留空即用完整音频：
+
+```yaml
+video:
+  duration: 00:03:00        # 3 分钟；也可写 180 / 180.5 / 180s / 3m / 1.5h / 3:00 / 00:03:00.250
+  # duration: null          # 不限制，用完整音频
+```
+
+只写想改的键即可，其余自动回落内置默认值。例如做竖屏短视频的字幕样式：
+
+```yaml
+subtitle:
+  size: 48
+  bottom: 0.12
+  text_color: "#FFE066"
+  box_color: [0, 0, 0]
+  box_alpha: 180
+```
+
+命令行仍可临时覆盖其中几项（`--subtitle-size` / `--subtitle-font` / `--subtitle-bottom` / `--no-subtitles`）：
+
+```bash
+python generate.py --subtitle-size 20      # 只改这一项，其余沿用 config.yaml
+```
+
+> `config.yaml` 解析失败会直接报错并指出文件路径（不会静默忽略你的配置）。
+> 读取它需要 `PyYAML`（已在 requirements.txt 中）。
+
 ### VideoSize 预设类
 
 在 `config.py` 中定义了所有可用的视频尺寸预设：
@@ -367,14 +530,22 @@ genVideo/
 ├── README.md              # 项目说明文档
 ├── AGENTS.md              # 项目目标和依赖说明
 ├── requirements.txt       # Python 依赖
-├── config.py             # 配置管理
-├── generate.py           # 主程序入口
+├── config.yaml            # 用户配置（目录/尺寸/帧率/编码器/字幕样式）
+├── config.py              # 配置管理（尺寸预设 + config.yaml 读取）
+├── generate.py            # 主程序入口
 ├── play.py               # 播放脚本（如有）
+├── assets/               # 素材（默认位置，可在 config.yaml 改）
+│   ├── images/           # 图片
+│   └── audio/            # 音频 audio.wav + 同名字幕 audio.srt
+├── output/               # 生成结果（自动创建）
+├── scripts/
+│   └── cp-audio.sh        # 从 CosyVoice 同步音频与字幕到 assets/audio/
 ├── utils/                # 工具模块
 │   ├── audio_utils.py    # 音频处理工具
 │   ├── media_utils.py    # 媒体处理工具（图片+视频）
 │   ├── image_utils.py    # 图片处理工具（兼容旧版）
 │   ├── video_utils.py    # 视频处理工具
+│   ├── subtitle_utils.py # 字幕解析与渲染
 │   ├── slideshow_utils.py # 轮播控制器
 │   └── animation_utils.py # 动画效果工具
 ├── tests/                # 测试目录
@@ -426,25 +597,27 @@ genVideo/
 #### 1. 找不到图片文件
 
 ```
-错误: 未在目录 `images` 中找到图片
+错误: 未找到图片目录 `assets/images`。
 ```
 
 **解决方案**：
 
-- 检查 `images/` 目录是否存在
-- 确保图片文件格式正确（jpg, png, jpeg, bmp, tiff）
-- 使用 `--images` 参数指定正确的图片目录
+- 把图片放入 `assets/images/`，或在 `config.yaml` 里改 `media.images`
+- 确保图片格式正确（jpg, jpeg, png, gif, webp, tiff, bmp）
+- 临时指定：`--images ./my_images`
+- 若你的图片在旧目录，可在 `config.yaml` 写 `media.images: media`
 
 #### 2. 找不到音频文件
 
 ```
-错误: 未找到 `audio.wav` 或 `audio.mp3`
+错误: 未找到音频文件（查找位置: `assets/audio/audio.wav`）。
 ```
 
 **解决方案**：
 
-- 在项目根目录放置音频文件，命名为 `audio.wav` 或 `audio.mp3`
-- 使用 `--audio` 参数指定音频文件路径
+- 把音频放到 `assets/audio/`，或在 `config.yaml` 的 `media.audio` 里写完整路径
+- 临时指定：`--audio ./my_audio.mp3`（文件或目录都可以）
+- 字幕需与音频同名（`xxx.wav` → `xxx.srt`），否则用 `subtitle.path` 指定
 
 #### 3. MoviePy 版本兼容性
 

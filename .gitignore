@@ -1,4 +1,11 @@
-images/
-media/
+# 素材（音频/字幕由 CosyVoice 产出，不入库）
+assets/
 audio.*
 *.mp4
+
+# 产物
+output/
+
+# 旧目录（兼容保留）
+images/
+media/
