@@ -34,7 +34,7 @@ video:
   preset: veryfast       # 仅 libx264 生效：ultrafast ... medium ... veryslow
   bitrate: 5000k         # 视频码率（硬件编码器建议调高，如 12000k）
   animation: false       # 是否给图片加随机缩放/平移动画（会明显降低编码速度）
-  layout: fullscreen     # 画面布局组件：fullscreen（全屏铺满） | card（背景不铺满+标题）
+  layout: hero     # 画面布局组件：fullscreen（全屏铺满） | card（背景不铺满+标题） | hero（杂志封面风）
 
 
 # ============ 画面布局（video.layout 选哪个就用哪段）============
@@ -52,6 +52,24 @@ layout:
     title_size: 60          # 标题字号（像素）
     title_color: "#FFFFFF"  # 标题颜色："#RRGGBB" / [r, g, b]
     title_position: top     # 标题在卡片 top（上方）/ bottom（下方）
+
+  hero:
+    bg_color: "#EDF2F4"     # 纸色背景（照片下沿渐隐落点）
+    hero_top: 0.0           # 照片区顶边，占画布高度比例
+    hero_h: 0.60            # 照片区高度，占画布高度比例（1080x1920 下 ≈ 1152px）
+    hero_position: top      # 照片裁剪位置：top / center / bottom ...
+    fade: true              # 照片下沿是否渐隐到纸色
+    grid: true              # 是否叠加网格纹理
+    grid_size: null         # 网格单元格边长（像素）；null = 按宽度自适应
+    grid_color: "#1E2528"   # 网格线颜色
+    grid_alpha: 0.05        # 网格线透明度 0~1
+    marks: true             # 是否画四角标记
+    accent: "#5E8C7A"       # 角标颜色
+    title: null             # 大背景标题；null = 自动用音频文件名（去扩展名）
+    title_size: null        # 基准字号；null = 按高度自适应（1080x1920 下 ≈340）
+    title_color: "#1E252861" # 标题颜色（半透明冷墨，末尾 61 = 38% 透明度）
+    title_font: null        # 标题字体路径；null = 自动找宋体
+    title_max_width: 0.8    # 标题最大宽度占画布比例，超出自动缩字号
 
 # ============ 字幕 ============
 subtitle:

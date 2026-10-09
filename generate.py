@@ -313,7 +313,7 @@ if __name__ == "__main__":
     parser.add_argument('--no-animation', dest='animation', action='store_false',
                         help='不启用动画效果')
     parser.add_argument('--layout', default=video_cfg["layout"],
-                        help='画面布局组件：fullscreen | card'
+                        help='画面布局组件：fullscreen | card | hero'
                              f' (config.yaml: video.layout = {video_cfg["layout"]})')
     parser.add_argument('--encoder', default=video_cfg["encoder"],
                         help='视频编码器: libx264 | h264_videotoolbox | h264_nvenc | ... | auto'
@@ -429,8 +429,8 @@ if __name__ == "__main__":
         print(f"错误: 未知布局 `{LAYOUT_NAME}`（可用: {', '.join(list_layouts())}）")
         raise SystemExit(1)
     LAYOUT_OPTIONS = dict(CFG.get("layout", {}).get(LAYOUT_NAME, {}) or {})
-    # card 布局的标题：未显式配置时，自动用音频文件名（去扩展名）
-    if LAYOUT_NAME == "card" and not LAYOUT_OPTIONS.get("title"):
+    # card / hero 布局的标题：未显式配置时，自动用音频文件名（去扩展名）
+    if LAYOUT_NAME in ("card", "hero") and not LAYOUT_OPTIONS.get("title"):
         LAYOUT_OPTIONS["title"] = os.path.splitext(os.path.basename(AUDIO_PATH))[0]
 
     ENCODER = args.encoder
