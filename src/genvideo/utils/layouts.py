@@ -427,3 +427,95 @@ def _render_hero_frame(source, video_size, options) -> np.ndarray:
 
     canvas = Image.alpha_composite(canvas.convert("RGBA"), overlay).convert("RGB")
     return np.asarray(canvas, dtype=np.uint8)
+
+
+def _fade_mask(w, h, axis="vertical"):
+    """
+    生成渐隐 alpha mask（L 灰度图），给 ffmpeg 后端的图片加透明度。
+
+    灰度值 = 图片保留度 = 1 - 纸色混合系数。竖屏顶部 255（不透明）到底部 0（透明）；
+    横屏从左 255 到右 0。
+    """
+    n = h if axis == "vertical" else w
+    ts = np.linspace(0.0, 1.0, n)
+    alphas = np.array([1.0 - _fade_alpha_at(t) for t in ts], dtype=np.float32)
+    arr = np.round(np.clip(alphas, 0, 1) * 255).astype(np.uint8)
+    if axis == "vertical":
+        arr = np.tile(arr[:, None], (1, w))
+    else:
+        arr = np.tile(arr[None, :], (h, 1))
+    return Image.fromarray(arr, mode="L")
+
+
+def _hero_static_assets(video_size, options):
+    """
+    渲染 hero 布局的静态资源，供 ffmpeg 后端合成用（与 frame 后端画面一致）。
+
+    返回:
+        dict:
+            background (PIL.Image): 纸色背景 + 网格 + 大标题 + 四角标记（不含图片）
+            mask (PIL.Image or None): 渐隐 alpha mask（fade=False 时为 None）
+            hero_rect (tuple): 图片应 overlay 到的区域 (x, y, w, h)
+            landscape (bool): 是否横屏
+    """
+    width, height = int(video_size[0]), int(video_size[1])
+    bg = parse_color(options.get("bg_color", "#EDF2F4"), 255) or (237, 242, 244, 255)
+    bg_rgb = bg[:3]
+    landscape = width > height
+
+    if landscape:
+        hero_w = float(options.get("hero_w", 0.60))
+        hero_w_px = max(1, int(round(width * hero_w)))
+        hero_w_px = min(hero_w_px, width)
+        hero_rect = (0, 0, hero_w_px, height)
+        photo_edge = hero_w_px
+        mask = _fade_mask(hero_w_px, height, axis="horizontal") if options.get("fade", True) else None
+    else:
+        hero_top = float(options.get("hero_top", 0.0))
+        hero_h = float(options.get("hero_h", 0.60))
+        hero_top_px = int(round(height * hero_top))
+        hero_h_px = max(1, int(round(height * hero_h)))
+        hero_h_px = min(hero_h_px, height - hero_top_px)
+        hero_rect = (0, hero_top_px, width, hero_h_px)
+        photo_edge = hero_top_px + hero_h_px
+        mask = _fade_mask(width, hero_h_px, axis="vertical") if hero_h_px > 0 and options.get("fade", True) else None
+
+    # 静态背景：纸色 + 网格 + 大标题 + 四角标记（都压在图片之上的元素）
+    background = Image.new("RGB", (width, height), bg_rgb)
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+    if options.get("grid", True):
+        _draw_grid(odraw, width, height, options)
+    title = str(options.get("title") or "").strip()
+    if title:
+        _draw_bg_title(odraw, width, height, title, options, landscape, photo_edge)
+    if options.get("marks", True):
+        _draw_corner_marks(odraw, width, height, options)
+    background = Image.alpha_composite(background.convert("RGBA"), overlay).convert("RGB")
+
+    return {"background": background, "mask": mask, "hero_rect": hero_rect, "landscape": landscape}
+
+
+def render_layout_static(layout_name, video_size, options):
+    """
+    渲染指定布局的静态资源（背景图 + 渐隐 mask + 图片区域），供 ffmpeg 后端合成。
+
+    这是「布局 UI 组件」与「渲染后端」解耦的接口：ffmpeg 后端复用这里产出的
+    静态元素，保证与 frame 后端画面一致。
+
+    返回:
+        dict or None:
+            hero/fullscreen 返回静态资源 dict；card 暂不支持 ffmpeg 后端，返回 None。
+    """
+    options = options or {}
+    if layout_name == "hero":
+        return _hero_static_assets(video_size, options)
+    if layout_name == "fullscreen":
+        # 图片 cover 铺满全屏，无背景无 mask
+        return {
+            "background": None,
+            "mask": None,
+            "hero_rect": (0, 0, int(video_size[0]), int(video_size[1])),
+            "landscape": int(video_size[0]) > int(video_size[1]),
+        }
+    return None

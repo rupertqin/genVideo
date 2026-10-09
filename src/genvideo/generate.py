@@ -36,8 +36,15 @@ from genvideo.config import (
     DEFAULT_CONFIG,
 )
 
-# 硬件 H.264 编码器候选（按优先级）；仅在显式使用 --encoder auto 时才会被采用
-HARDWARE_ENCODERS = ("h264_videotoolbox", "h264_nvenc", "h264_qsv", "h264_amf")
+# 编码器 / 渲染后端：从 render 层导入（模块化）
+from genvideo.render.encoder import (
+    HARDWARE_ENCODERS,
+    detect_hardware_encoder,
+    resolve_encoder,
+    build_write_kwargs as _build_write_kwargs,
+)
+from genvideo.render.ffmpeg import render_slideshow_ffmpeg
+from genvideo.render.progress import FpsMeter
 
 # create_slideshow 的程序化默认值（与 config.yaml 的内置默认同源）
 DEFAULT_VIDEO = DEFAULT_CONFIG["video"]
@@ -48,54 +55,6 @@ LEGACY_MEDIA_DIRS = ("media", "images")
 LEGACY_AUDIO_DIRS = (".", "media")
 
 
-def detect_hardware_encoder():
-    """
-    探测 moviepy 实际调用的 ffmpeg 是否带硬件 H.264 编码器。
-
-    返回:
-        str or None: 第一个可用的硬件编码器名，没有则 None
-    """
-    try:
-        import subprocess
-
-        import imageio_ffmpeg
-
-        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-        result = subprocess.run(
-            [ffmpeg_exe, "-hide_banner", "-encoders"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-    except Exception:
-        return None
-
-    for name in HARDWARE_ENCODERS:
-        if name in result.stdout:
-            return name
-    return None
-
-
-def _build_write_kwargs(fps, encoder, preset, bitrate):
-    """
-    组装 MoviePy ``write_videofile`` 的参数。
-
-    ``preset`` 只对软件 x264 有意义；硬件编码器不能传 ``None``
-    （MoviePy 会当成路径处理而报 TypeError），所以直接不传。
-    """
-    kwargs = dict(
-        fps=fps,
-        codec=encoder,
-        audio_codec="aac",
-        audio_bitrate="192k",
-        bitrate=bitrate,
-        threads=4,
-    )
-    if encoder == "libx264" and preset:
-        kwargs["preset"] = preset
-    return kwargs
-
-
 def create_slideshow(media_items, audio_path, output_path,
                      transition_duration=1,
                      stage_size=(1280, 720), fps=30, audio_duration=0,
@@ -103,7 +62,8 @@ def create_slideshow(media_items, audio_path, output_path,
                      subtitle_path=None, subtitle_options=None,
                      encoder=DEFAULT_VIDEO["encoder"], preset=DEFAULT_PRESET,
                      bitrate=DEFAULT_VIDEO["bitrate"],
-                     layout_name="fullscreen", layout_options=None):
+                     layout_name="fullscreen", layout_options=None,
+                     backend="frame", uniform_interval=5.0):
     """
     创建新版 MoviePy 的混合媒体轮播视频
 
@@ -120,10 +80,13 @@ def create_slideshow(media_items, audio_path, output_path,
         audio_duration (float): 目标音频时长，0表示使用原始音频时长
         animation_config (AnimationConfig): 动画配置对象，None 表示无动画
         random_animation (bool): 是否为每张图片随机选择动画效果
+        backend (str): 渲染后端。"frame"=MoviePy 逐帧（默认，支持视频/动画）；
+            "ffmpeg"=纯 ffmpeg 滤镜链（仅图片轮播，缩放/字幕/转场下推到 ffmpeg，更快）
 
     内部实现适配 v2.x API
     """
     stage_size = parse_video_size(stage_size)
+    encoder = resolve_encoder(encoder)
     print(f"视频尺寸: {stage_size[0]} x {stage_size[1]}")
 
     # audio_duration > 0 表示调用方明确要求了时长上限；否则用完整音频
@@ -146,10 +109,19 @@ def create_slideshow(media_items, audio_path, output_path,
     # 截断时长时，只保留时长范围内的停顿点，否则会出现超出片尾的分段
     pause_points = [point for point in pause_points if 0 < point < audio_duration]
     print(f"检测到停顿点（间隔 >= 5秒）: {pause_points}")
-    print(f"检测到停顿点数量: {len(pause_points)}")
-    change_points = [0.0] + pause_points + [audio_duration]
 
     n_media = len(media_items)
+
+    # 无停顿点时按固定间隔均匀分段，避免整片只轮播一张图
+    if not pause_points and n_media > 0 and audio_duration > 0:
+        interval = max(0.5, float(uniform_interval))
+        n_segments = min(n_media, max(1, int(round(audio_duration / interval))))
+        if n_segments > 1:
+            pause_points = [audio_duration * (i + 1) / n_segments for i in range(n_segments - 1)]
+            print(f"未检测到停顿点，按 {interval} 秒间隔均匀分段为 {n_segments} 段")
+
+    print(f"检测到停顿点数量: {len(pause_points)}")
+    change_points = [0.0] + pause_points + [audio_duration]
     controller = SlideshowController(media_items, change_points)
     print("轮播切换顺序:")
     for i in range(len(change_points) - 1):
@@ -161,6 +133,27 @@ def create_slideshow(media_items, audio_path, output_path,
         raise FileNotFoundError("未提供任何媒体文件，无法生成轮播视频。请在 `media` 目录添加图片或视频。")
     if n_media < len(change_points) - 1:
         print(f"媒体数量 ({n_media}) 少于切换点数量 ({len(change_points)-1})，将循环使用媒体以覆盖所有切换点。")
+
+    # ---- ffmpeg 滤镜链后端：缩放/字幕/转场全部下推到 ffmpeg（仅图片轮播）----
+    if backend == "ffmpeg":
+        render_slideshow_ffmpeg(
+            media_items=media_items,
+            change_points=change_points,
+            audio_path=audio_path,
+            output_path=output_path,
+            stage_size=stage_size,
+            fps=fps,
+            transition_duration=transition_duration,
+            subtitle_path=subtitle_path,
+            subtitle_options=subtitle_options,
+            encoder=encoder,
+            preset=preset,
+            bitrate=bitrate,
+            layout_name=layout_name,
+            layout_options=layout_options,
+        )
+        print(f"视频生成成功: {output_path}")
+        return
 
     clips = []
     for i in range(len(change_points) - 1):
@@ -239,9 +232,13 @@ def create_slideshow(media_items, audio_path, output_path,
             print(f"警告: 字幕文件未解析出内容，已跳过: {subtitle_path}")
 
     ensure_parent_dir(output_path)
+    meter = FpsMeter()
+    meter.start()
     final_video.write_videofile(
         output_path, **_build_write_kwargs(fps, encoder, preset, bitrate)
     )
+    meter.stop(frames=int(fps * audio_duration))
+    print(meter.summary("编码"))
     print(f"视频生成成功: {output_path}")
 
 
@@ -323,6 +320,9 @@ def main(argv=None):
                              f' (config.yaml: {video_cfg["preset"]})')
     parser.add_argument('--bitrate', default=video_cfg["bitrate"],
                         help=f'视频码率 (config.yaml: {video_cfg["bitrate"]}；硬件编码器建议适当调高)')
+    parser.add_argument('--backend', default=video_cfg.get("backend", "frame"),
+                        help='渲染后端: frame（MoviePy 逐帧，支持视频/动画）| ffmpeg（滤镜链，仅图片，更快）'
+                             f' (config.yaml: video.backend = {video_cfg.get("backend", "frame")})')
     parser.add_argument('--subtitles', dest='subtitles', default=sub_cfg["path"],
                         help='字幕文件路径 (默认: 自动查找与音频同名的 .srt)')
     parser.add_argument('--no-subtitles', dest='subtitles_enabled', action='store_false',
@@ -433,15 +433,7 @@ def main(argv=None):
     if LAYOUT_NAME in ("card", "hero") and not LAYOUT_OPTIONS.get("title"):
         LAYOUT_OPTIONS["title"] = os.path.splitext(os.path.basename(AUDIO_PATH))[0]
 
-    ENCODER = args.encoder
-    if ENCODER == 'auto':
-        detected = detect_hardware_encoder()
-        if detected:
-            ENCODER = detected
-            print(f"已自动选择硬件编码器: {detected}")
-        else:
-            ENCODER = 'libx264'
-            print("未检测到可用的硬件编码器，回退到 libx264")
+    ENCODER = resolve_encoder(args.encoder)
 
     try:
         STAGE_SIZE = parse_video_size(args.size)
@@ -492,6 +484,7 @@ def main(argv=None):
         )
     print(f"  编码器: {ENCODER}" + (f" (preset={args.preset})" if ENCODER == 'libx264' else ''))
     print(f"  码率: {args.bitrate}")
+    print(f"  渲染后端: {args.backend}")
     print("=" * 60)
 
     start_time = time.time()
@@ -513,6 +506,7 @@ def main(argv=None):
         encoder=ENCODER,
         preset=args.preset,
         bitrate=args.bitrate,
+        backend=args.backend,
     )
 
     end_time = time.time()

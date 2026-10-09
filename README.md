@@ -258,27 +258,37 @@ python -m genvideo --subtitle-font /path/to/font.ttf   # 指定字体（默认�
 - 渲染使用 Pillow 生成带描边与半透明底色的 RGBA 图层，再由 MoviePy 按时间区间叠加到成片；
 - 常见 PyAV 版本差异（如 16.x 的 `dialogue` 属性异常）已做回退兼容。
 
-#### 编码器与码率（性能）
+#### 编码器与渲染后端（性能）
 
-默认使用软件编码 `libx264`（`preset=veryfast`），跨平台、画质与体积可控。需要更快时可用硬件编码：
+默认 `encoder: auto`，会自动探测并启用硬件编码器（macOS 的 VideoToolbox、NVIDIA 的 NVENC 等），探测不到才回退软件编码 `libx264`：
 
 ```bash
-# macOS：VideoToolbox 硬件编码（约 1.5~2.4 倍）
-python -m genvideo --encoder h264_videotoolbox
+# 默认：自动探测硬件编码器（已设为默认，无需显式指定）
+python -m genvideo
 
-# 自动探测可用硬件编码器，探测不到则回退 libx264
-python -m genvideo --encoder auto
+# 显式指定编码器
+python -m genvideo --encoder libx264            # 软件编码（跨平台、画质体积可控）
+python -m genvideo --encoder h264_videotoolbox  # macOS 硬编
+python -m genvideo --encoder h264_nvenc         # NVIDIA 硬编
 
 # 软件编码速度档位（越快画质略降）
-python -m genvideo --preset superfast
+python -m genvideo --encoder libx264 --preset superfast
 
 # 硬件编码器建议适当调高码率
 python -m genvideo --encoder h264_videotoolbox --bitrate 12000k
 ```
 
-为什么硬件编码不设为默认：`h264_videotoolbox` 仅 macOS 存在（Linux/Windows 是 `h264_nvenc` / `h264_qsv` / `h264_amf`），
-直接写死会在其它平台报错；且同码率下画质与体积通常不如 libx264，输出还会随 GPU/驱动/系统版本变化、不易复现。
-因此保留 libx264 为默认，需要时用 `--encoder auto` 自动探测并回退。
+`backend` 决定「帧如何生成与合成」：
+
+- `frame`（默认）：MoviePy 逐帧后端。支持视频混排、Ken Burns 动画、可插拔布局（fullscreen/card/hero），灵活但逐帧在 Python 层处理。
+- `ffmpeg`：纯 ffmpeg 滤镜链后端。把**缩放、转场、字幕全部下推到 ffmpeg**，整条管线在 ffmpeg 内部完成，配硬件编码器后接近剪辑软件速度。仅支持**图片轮播**（不含视频/动画）。
+
+```bash
+# 图片轮播 + 更快的滤镜链渲染
+python -m genvideo --backend ffmpeg
+```
+
+> `ffmpeg` 后端遇到视频/动画素材会自动报错并提示改用 `frame` 后端。
 
 ### 可用的视频尺寸预设
 
@@ -434,11 +444,12 @@ video:
   fps: 24                # 帧率（总帧数 = 时长 x fps，直接影响耗时）
   duration: null         # 输出时长；null = 用完整音频（写法见下）
   transition: 1.0        # 媒体切换过渡时长（秒）
-  encoder: libx264       # libx264 | h264_videotoolbox | ... | auto
+  encoder: auto          # libx264 | h264_videotoolbox | h264_nvenc | ... | auto
   preset: veryfast       # 仅 libx264 生效
   bitrate: 5000k
   animation: false       # 图片是否加随机缩放/平移动画
-  layout: fullscreen     # 画面布局组件：fullscreen | card
+  backend: frame         # frame（MoviePy 逐帧）| ffmpeg（滤镜链，仅图片，更快）
+  layout: fullscreen     # 画面布局组件：fullscreen | card | hero
 
 media:
   images: assets/images            # 图片目录
@@ -579,6 +590,10 @@ genVideo/
 │       ├── config.py      # 配置管理（尺寸预设 + config.yaml 读取）
 │       ├── config.yaml    # 默认配置（目录/尺寸/帧率/编码器/字幕样式）
 │       ├── generate.py    # 主程序入口（create_slideshow + CLI main）
+│       ├── render/        # 渲染层（编码器选择 / 进度计时 / ffmpeg 滤镜链后端）
+│       │   ├── encoder.py # 硬件编码器探测 + auto 解析 + 编码参数
+│       │   ├── progress.py # 渲染进度与 fps 计时
+│       │   └── ffmpeg.py  # ffmpeg 滤镜链后端（缩放/字幕/转场下推）
 │       └── utils/         # 工具模块
 │           ├── audio_utils.py    # 音频处理工具
 │           ├── media_utils.py    # 媒体处理工具（图片+视频）

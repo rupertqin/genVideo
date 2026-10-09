@@ -408,6 +408,8 @@ class TestSubtitleOptions:
         """返回的键名与 render_subtitle_frame 的参数一致"""
         options = subtitle_options(None)
         assert set(options) == {
-            "font_path", "font_size", "bottom_ratio", "max_width_ratio",
-            "line_spacing", "stroke_width", "strip_punct", "text_color", "box_color",
+            "font_path", "font_size", "font_size_landscape",
+            "bottom_ratio", "bottom_ratio_landscape",
+            "max_width_ratio", "line_spacing", "stroke_width", "strip_punct",
+            "text_color", "box_color",
         }

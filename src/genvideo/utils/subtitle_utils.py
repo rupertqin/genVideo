@@ -293,6 +293,9 @@ def render_subtitle_frame(
     strip_punct: bool = False,
     text_color: Tuple[int, int, int, int] = (255, 255, 255, 255),
     box_color: Tuple[int, int, int, int] = (0, 0, 0, 150),
+    shadow: bool = True,
+    bottom_ratio_landscape: Optional[float] = None,
+    font_size_landscape: Optional[int] = None,
 ) -> np.ndarray:
     """
     把一条字幕渲染成全屏 RGBA 图（背景透明），供叠加到视频帧。
@@ -302,13 +305,16 @@ def render_subtitle_frame(
         size (tuple): 视频尺寸 (width, height)
         font_path (str): 字体文件路径，None 时自动查找
         font_size (int): 字号（像素），None 时按视频高度自适应
-        bottom_ratio (float): 字幕底部留白占视频高度的比例
+        font_size_landscape (int): 横屏时的字号（None 时沿用 font_size）
+        bottom_ratio (float): 字幕底部留白占视频高度的比例（竖屏 / 默认）
+        bottom_ratio_landscape (float): 横屏时的底部留白比例（None 时沿用 bottom_ratio）
         max_width_ratio (float): 单行最大宽度占视频宽度的比例
         line_spacing (float): 行距倍数
-        stroke_width (int): 文字描边宽度
+        stroke_width (int): 阴影偏移量（像素，0 = 无阴影）
         strip_punct (bool): 去掉逗号/句号（句尾删除、句中替换为空格）
         text_color (tuple): 文字颜色 RGBA
         box_color (tuple): 文字底色 RGBA（alpha 为 0 时不画底色）
+        shadow (bool): 是否用柔和阴影（右下偏移半透明黑）替代硬描边
 
     返回:
         numpy.ndarray: 形状 (height, width, 4) 的 uint8 RGBA 数组
@@ -324,9 +330,13 @@ def render_subtitle_frame(
     if not text:
         return np.asarray(frame, dtype=np.uint8)
 
-    if font_size is None:
+    # 横屏时字号更大（若指定了横屏专属字号）
+    if width > height and font_size_landscape is not None:
+        font_size = int(font_size_landscape)
+    elif font_size is None:
         font_size = max(16, int(round(height * 0.05)))
-    font_size = int(font_size)
+    else:
+        font_size = int(font_size)
 
     resolved_font = font_path or find_default_font()
     if resolved_font:
@@ -344,7 +354,11 @@ def render_subtitle_frame(
     line_gap = int(round(line_height * (line_spacing - 1.0)))
     total_height = line_height * len(lines) + line_gap * (len(lines) - 1)
 
-    bottom_margin = height * bottom_ratio
+    # 横屏时字幕更靠底部（若指定了横屏专属比例）
+    ratio = bottom_ratio
+    if width > height and bottom_ratio_landscape is not None:
+        ratio = bottom_ratio_landscape
+    bottom_margin = height * ratio
     top = height - bottom_margin - total_height
     if top < 0:
         top = 0.0
@@ -366,14 +380,11 @@ def render_subtitle_frame(
                 radius=int(font_size * 0.25),
                 fill=box_color,
             )
-        draw.text(
-            (x, y),
-            line,
-            font=font,
-            fill=text_color,
-            stroke_width=stroke_width,
-            stroke_fill=(0, 0, 0, 255),
-        )
+        # 柔和阴影（替代硬描边）：右下偏移的半透明黑，先画阴影再画主文字
+        offset = max(1, int(stroke_width)) if shadow else 0
+        if offset > 0:
+            draw.text((x + offset, y + offset), line, font=font, fill=(0, 0, 0, 150))
+        draw.text((x, y), line, font=font, fill=text_color)
         y += line_height + line_gap
 
     return np.asarray(frame, dtype=np.uint8)

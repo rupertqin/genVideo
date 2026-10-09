@@ -153,11 +153,12 @@ DEFAULT_CONFIG = {
         "fps": 24,
         "duration": None,
         "transition": 1.0,
-        "encoder": "libx264",
+        "encoder": "auto",
         "preset": "veryfast",
         "bitrate": "5000k",
         "animation": False,
         "layout": "fullscreen",
+        "backend": "frame",
     },
     "media": {
         "images": "assets/images",
@@ -204,7 +205,9 @@ DEFAULT_CONFIG = {
         "path": None,
         "font": None,
         "size": None,
+        "size_landscape": None,
         "bottom": 0.08,
+        "bottom_landscape": 0.06,
         "max_width": 0.9,
         "line_spacing": 1.25,
         "stroke_width": 3,
@@ -394,10 +397,13 @@ def subtitle_options(config=None):
     section = merge_config(DEFAULT_CONFIG["subtitle"], (config or {}).get("subtitle", {}))
 
     font_size = section.get("size")
+    font_size_landscape = section.get("size_landscape")
     return {
         "font_path": section.get("font"),
         "font_size": int(font_size) if font_size else None,
+        "font_size_landscape": int(font_size_landscape) if font_size_landscape else None,
         "bottom_ratio": float(section.get("bottom", 0.08)),
+        "bottom_ratio_landscape": float(section.get("bottom_landscape", section.get("bottom", 0.08))),
         "max_width_ratio": float(section.get("max_width", 0.9)),
         "line_spacing": float(section.get("line_spacing", 1.25)),
         "stroke_width": int(section.get("stroke_width", 3)),

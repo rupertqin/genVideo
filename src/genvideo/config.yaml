@@ -30,10 +30,11 @@ video:
   # duration: null
 
   transition: 1.0        # 媒体切换过渡时长（秒）
-  encoder: libx264       # libx264 | h264_videotoolbox | h264_nvenc | ... | auto
+  encoder: auto          # libx264 | h264_videotoolbox | h264_nvenc | ... | auto（自动探测硬编）
   preset: veryfast       # 仅 libx264 生效：ultrafast ... medium ... veryslow
   bitrate: 5000k         # 视频码率（硬件编码器建议调高，如 12000k）
   animation: false       # 是否给图片加随机缩放/平移动画（会明显降低编码速度）
+  backend: frame         # 渲染后端：frame（MoviePy 逐帧，支持视频/动画）| ffmpeg（滤镜链，仅图片，更快）
   layout: hero     # 画面布局组件：fullscreen（全屏铺满） | card（背景不铺满+标题） | hero（杂志封面风）
 
 
@@ -83,11 +84,13 @@ subtitle:
   path: null
   font: null             # 字体文件；null = 自动选择系统中文字体
   size: 40             # 字号（像素）；null = 按视频高度自适应（height x 0.05）
+  size_landscape: 56   # 横屏（HD）字号，横屏字幕更大；null = 沿用 size
 
-  bottom: 0.18           # 距底部高度比例（0.08 = 视频高度的 8%）
+  bottom: 0.18           # 距底部高度比例（竖屏 / 默认；0.18 = 视频高度的 18%）
+  bottom_landscape: 0.06 # 横屏（HD）距底部高度比例，横屏字幕更靠底部
   max_width: 0.9         # 单行最大宽度占视频宽度比例，超出自动折行
   line_spacing: 1.25     # 行距倍数
-  stroke_width: 3        # 文字描边宽度（像素），保证浅色背景上也清晰
+  stroke_width: 3        # 文字阴影偏移量（像素）；0 = 无阴影（用柔和阴影替代硬描边）
   strip_punct: true      # 去掉逗号/句号：句尾直接删除，句中替换为空格（只影响渲染，不动 srt）
 
   text_color: "#FFFFFF"  # 文字颜色："#RRGGBB" / "#RRGGBBAA" / [r, g, b] / [r, g, b, a]
