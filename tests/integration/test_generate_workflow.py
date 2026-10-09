@@ -8,9 +8,9 @@ import shutil
 from unittest.mock import patch, MagicMock
 
 # 导入主模块进行测试
-from generate import create_slideshow
-from utils.slideshow_utils import SlideshowController
-from utils.animation_utils import AnimationConfig
+from genvideo.generate import create_slideshow
+from genvideo.utils.slideshow_utils import SlideshowController
+from genvideo.utils.animation_utils import AnimationConfig
 
 
 class TestGenerateSlideshowWorkflow:
@@ -167,8 +167,8 @@ class TestGenerateSlideshowWorkflow:
 
     @pytest.mark.requires_images
     @pytest.mark.requires_audio
-    @patch('utils.audio_utils.get_audio_duration_ffmpeg')
-    @patch('utils.audio_utils.get_audio_pauses')
+    @patch('genvideo.utils.audio_utils.get_audio_duration_ffmpeg')
+    @patch('genvideo.utils.audio_utils.get_audio_pauses')
     def test_audio_processing_integration(self, mock_pauses, mock_duration,
                                          sample_image_paths, sample_audio_path, temp_dir):
         """测试音频处理在集成流程中的工作"""

@@ -8,25 +8,25 @@ import os
 import argparse
 import time
 
-from utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
-from utils.media_utils import (
+from genvideo.utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
+from genvideo.utils.media_utils import (
     get_media_paths,
     find_audio_in,
     ensure_parent_dir,
     MediaType,
 )
-from utils.slideshow_utils import SlideshowController
-from utils.video_utils import resize_and_position_video
-from utils.animation_utils import AnimationConfig, apply_animation, get_random_animation_config
-from utils.subtitle_utils import (
+from genvideo.utils.slideshow_utils import SlideshowController
+from genvideo.utils.video_utils import resize_and_position_video
+from genvideo.utils.animation_utils import AnimationConfig, apply_animation, get_random_animation_config
+from genvideo.utils.subtitle_utils import (
     load_subtitles,
     burn_subtitles,
     filter_cues,
     find_subtitle_path,
     format_timestamp,
 )
-from utils.layouts import get_layout, list_layouts
-from config import (
+from genvideo.utils.layouts import get_layout, list_layouts
+from genvideo.config import (
     VideoSize,
     parse_video_size,
     print_available_sizes,
@@ -245,8 +245,8 @@ def create_slideshow(media_items, audio_path, output_path,
     print(f"视频生成成功: {output_path}")
 
 
-if __name__ == "__main__":
-
+def main(argv=None):
+    """CLI 入口：解析参数并生成视频（供 ``genvideo`` 命令与 ``python -m genvideo`` 调用）。"""
     # config.yaml 提供默认值；命令行参数可覆盖（优先级：命令行 > config.yaml > 内置默认）
     try:
         CFG = load_config()
@@ -337,7 +337,7 @@ if __name__ == "__main__":
     parser.add_argument('--list-sizes', action='store_true',
                         help='列出所有可用的视频尺寸预设')
 
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
 
     if args.list_sizes:
         print_available_sizes()
@@ -525,3 +525,7 @@ if __name__ == "__main__":
     print(f"  总耗时: {minutes} 分 {seconds:.2f} 秒")
     print(f"  输出文件: {args.output}")
     print("=" * 60)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

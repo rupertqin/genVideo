@@ -8,7 +8,7 @@ import numpy as np
 from PIL import Image
 from moviepy import VideoClip
 
-from utils.video_utils import RESAMPLE_ANIMATED, fit_frame
+from genvideo.utils.video_utils import RESAMPLE_ANIMATED, fit_frame
 
 
 class EasingCurve:

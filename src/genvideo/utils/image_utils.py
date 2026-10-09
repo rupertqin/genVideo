@@ -4,7 +4,7 @@
 兼容旧版接口，内部使用 media_utils
 """
 import os
-from utils.media_utils import (
+from genvideo.utils.media_utils import (
     get_media_paths as _get_media_paths,
     get_image_paths as _get_image_paths,
     get_video_paths as _get_video_paths,

@@ -10,8 +10,9 @@ from PIL import Image
 import av
 import sys
 
-# 添加项目根目录到 Python 路径
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# 把 src/ 目录加入 Python 路径，让测试能 import genvideo（src 布局，无需先 pip install）
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(_PROJECT_ROOT, "src"))
 
 
 @pytest.fixture(scope="session")
@@ -116,8 +117,8 @@ def mock_audio_utils(monkeypatch):
     def mock_get_pauses(audio_path, min_pause=0.5, noise_threshold=-35):
         return [2.0, 5.0, 8.0]
 
-    monkeypatch.setattr("utils.audio_utils.get_audio_duration_ffmpeg", mock_get_duration)
-    monkeypatch.setattr("utils.audio_utils.get_audio_pauses", mock_get_pauses)
+    monkeypatch.setattr("genvideo.utils.audio_utils.get_audio_duration_ffmpeg", mock_get_duration)
+    monkeypatch.setattr("genvideo.utils.audio_utils.get_audio_pauses", mock_get_pauses)
 
 
 @pytest.fixture
@@ -133,8 +134,8 @@ def mock_image_utils(monkeypatch):
     def mock_get_audio_path():
         return "audio.wav"
 
-    monkeypatch.setattr("utils.image_utils.get_image_paths", mock_get_image_paths)
-    monkeypatch.setattr("utils.image_utils.get_audio_path", mock_get_audio_path)
+    monkeypatch.setattr("genvideo.utils.image_utils.get_image_paths", mock_get_image_paths)
+    monkeypatch.setattr("genvideo.utils.image_utils.get_audio_path", mock_get_audio_path)
 
 
 # 标记定义

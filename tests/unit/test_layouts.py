@@ -4,7 +4,7 @@ layouts.py 布局组件模块的单元测试
 import numpy as np
 import pytest
 
-from utils.layouts import (
+from genvideo.utils.layouts import (
     card_layout,
     fullscreen_layout,
     get_layout,
@@ -216,3 +216,57 @@ class TestHeroLayout:
 
         # 网格线处像素应略暗于纯纸色（非均匀）
         assert (frame[..., 0] != frame[..., 1]).any() or (frame.min() < 237)
+
+
+class TestHeroLandscape:
+    """hero 布局在横屏（HD）下的测试：照片带改为左侧通栏、渐隐向右、标题在右侧纸色区"""
+
+    @staticmethod
+    def _grey_source(height=120, width=200, value=200):
+        return np.full((height, width, 3), value, dtype=np.uint8)
+
+    @staticmethod
+    def _base_options():
+        return {
+            "hero_w": 0.60,
+            "hero_position": "left",
+            "fade": True,
+            "grid": False,
+            "marks": False,
+        }
+
+    def test_static_and_shape(self):
+        """横屏也返回静态帧，尺寸等于画布"""
+        frame_fn = hero_layout(self._grey_source(), (240, 160), 5.0, self._base_options())
+        frame = frame_fn(0)
+        assert frame.shape == (160, 240, 3)
+        assert frame_fn(3.9) is frame
+
+    def test_photo_left_paper_right(self):
+        """横屏下照片铺满左侧通栏（无留边），右侧是纸色"""
+        frame = hero_layout(self._grey_source(), (240, 160), 5.0, self._base_options())(0).astype(int)
+
+        # 左侧边缘 = 原图灰度（满幅，无 inset）
+        assert frame[80, 0].mean() == 200
+        # 右侧边缘 = 纸色（照片只占左 60%）
+        assert list(frame[80, -1]) == [237, 242, 244]
+
+    def test_horizontal_fade_to_paper(self):
+        """照片右沿渐隐到纸色"""
+        frame = hero_layout(self._grey_source(), (240, 160), 5.0, self._base_options())(0).astype(int)
+        # 照片右边界（x=143）已被渐隐到接近纸色
+        assert frame[80, 143].mean() > 230
+
+    def test_title_on_right_side(self):
+        """标题出现在右侧纸色区"""
+        options = self._base_options()
+        options["title"] = "测试标题"
+        frame = hero_layout(self._grey_source(), (240, 160), 5.0, options)(0).astype(int)
+
+        right = frame[:, 144:]
+        assert (right < 200).sum() > 0
+
+    def test_no_title_no_dark_pixels(self):
+        """无标题（且关网格/角标）时横屏画面没有比源图更暗的像素"""
+        frame = hero_layout(self._grey_source(), (240, 160), 5.0, self._base_options())(0).astype(int)
+        assert (frame < 200).sum() == 0

@@ -3,7 +3,7 @@ slideshow_utils.py 模块的单元测试
 """
 import pytest
 
-from utils.slideshow_utils import SlideshowController
+from genvideo.utils.slideshow_utils import SlideshowController
 
 
 class TestSlideshowController:

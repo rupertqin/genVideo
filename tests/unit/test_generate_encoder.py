@@ -13,7 +13,7 @@ import pytest
 
 import imageio_ffmpeg
 
-from generate import (
+from genvideo.generate import (
     DEFAULT_PRESET,
     HARDWARE_ENCODERS,
     _build_write_kwargs,

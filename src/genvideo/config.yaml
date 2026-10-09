@@ -15,7 +15,7 @@ media:
   output: output/generated.mp4
 
 video:
-  size: PORTRAIT_1080P          # 尺寸预设（HD_720P / HD_1080P / PORTRAIT_1080P ...）或 "1280x720"
+  size: HD_1080P          # 尺寸预设（HD_720P / HD_1080P / PORTRAIT_1080P ...）或 "1280x720"
   fps: 24                # 帧率；总帧数 = 时长 x fps，直接影响编码耗时
 
   # 输出时长（同时截断音频）；null = 用完整音频
@@ -54,11 +54,12 @@ layout:
     title_position: top     # 标题在卡片 top（上方）/ bottom（下方）
 
   hero:
-    bg_color: "#EDF2F4"     # 纸色背景（照片下沿渐隐落点）
-    hero_top: 0.0           # 照片区顶边，占画布高度比例
-    hero_h: 0.60            # 照片区高度，占画布高度比例（1080x1920 下 ≈ 1152px）
-    hero_position: top      # 照片裁剪位置：top / center / bottom ...
-    fade: true              # 照片下沿是否渐隐到纸色
+    bg_color: "#EDF2F4"     # 纸色背景（照片下沿/右沿渐隐落点）
+    hero_top: 0.0           # 竖屏照片区顶边，占画布高度比例
+    hero_h: 0.60            # 竖屏照片区高度，占画布高度比例（1080x1920 下 ≈ 1152px）
+    hero_w: 0.60            # 横屏照片区宽度，占画布宽度比例（1920x1080 下 ≈ 1152px）
+    hero_position: null     # 照片裁剪位置；null = 竖屏 top / 横屏 left 自动选择
+    fade: true              # 照片下沿/右沿是否渐隐到纸色
     grid: true              # 是否叠加网格纹理
     grid_size: null         # 网格单元格边长（像素）；null = 按宽度自适应
     grid_color: "#1E2528"   # 网格线颜色

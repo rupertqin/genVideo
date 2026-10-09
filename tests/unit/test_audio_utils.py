@@ -8,7 +8,7 @@ import av
 import os
 from unittest.mock import patch, MagicMock
 
-from utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
+from genvideo.utils.audio_utils import get_audio_duration_ffmpeg, get_audio_pauses
 
 
 class TestGetAudioDuration:
@@ -35,7 +35,7 @@ class TestGetAudioDuration:
         with pytest.raises(RuntimeError):
             get_audio_duration_ffmpeg("nonexistent.wav")
 
-    @patch('utils.audio_utils.av.open')
+    @patch('genvideo.utils.audio_utils.av.open')
     def test_av_exception_handling(self, mock_av_open):
         """测试 PyAV 异常处理"""
         mock_av_open.side_effect = Exception("Test error")
@@ -45,7 +45,7 @@ class TestGetAudioDuration:
 
         assert "无法获取音频时长（PyAV）" in str(exc_info.value)
 
-    @patch('utils.audio_utils.av.open')
+    @patch('genvideo.utils.audio_utils.av.open')
     def test_no_audio_stream(self, mock_av_open):
         """测试没有音频流的情况"""
         mock_container = MagicMock()
@@ -62,7 +62,7 @@ class TestGetAudioPauses:
     def test_silence_detection_basic(self):
         """测试基本静音检测"""
         # 创建一个包含静音的模拟音频
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_container = MagicMock()
             mock_stream = MagicMock()
             mock_container.streams.audio = [mock_stream]
@@ -91,7 +91,7 @@ class TestGetAudioPauses:
 
     def test_no_silence(self):
         """测试没有静音的情况"""
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_container = MagicMock()
             mock_stream = MagicMock()
             mock_container.streams.audio = [mock_stream]
@@ -112,7 +112,7 @@ class TestGetAudioPauses:
 
     def test_silence_too_short(self):
         """测试静音时长小于最小要求的情况"""
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_container = MagicMock()
             mock_stream = MagicMock()
             mock_container.streams.audio = [mock_stream]
@@ -133,7 +133,7 @@ class TestGetAudioPauses:
 
     def test_av_exception_handling(self, caplog):
         """测试 PyAV 异常处理"""
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_av_open.side_effect = Exception("Test error")
 
             pauses = get_audio_pauses("test.wav")
@@ -142,7 +142,7 @@ class TestGetAudioPauses:
 
     def test_empty_audio_array(self):
         """测试空音频数组的处理"""
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_container = MagicMock()
             mock_stream = MagicMock()
             mock_container.streams.audio = [mock_stream]
@@ -163,7 +163,7 @@ class TestGetAudioPauses:
 
     def test_rms_calculation_edge_cases(self):
         """测试 RMS 计算的边界情况"""
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_container = MagicMock()
             mock_stream = MagicMock()
             mock_container.streams.audio = [mock_stream]
@@ -185,7 +185,7 @@ class TestGetAudioPauses:
     def test_parameters_validation(self):
         """测试参数验证"""
         # 测试不同的参数组合
-        with patch('utils.audio_utils.av.open') as mock_av_open:
+        with patch('genvideo.utils.audio_utils.av.open') as mock_av_open:
             mock_container = MagicMock()
             mock_stream = MagicMock()
             mock_container.streams.audio = [mock_stream]

@@ -15,7 +15,7 @@ import types
 import numpy as np
 import pytest
 
-from utils.subtitle_utils import (
+from genvideo.utils.subtitle_utils import (
     SubtitleCue,
     _ass_tail,
     _rect_to_text,

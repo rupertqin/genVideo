@@ -6,7 +6,7 @@ import os
 import tempfile
 from unittest.mock import patch, MagicMock
 
-from utils.image_utils import get_image_paths, get_audio_path
+from genvideo.utils.image_utils import get_image_paths, get_audio_path
 
 
 class TestGetImagePaths:

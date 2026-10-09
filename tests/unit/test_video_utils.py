@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from moviepy import ImageClip
 
-from utils.video_utils import (
+from genvideo.utils.video_utils import (
     cover_geometry,
     resize_and_position_image,
     calculate_image_scale,
@@ -171,7 +171,7 @@ class TestResizeAndPositionImage:
 class TestCreateCenteredVideoFrame:
     """create_centered_video_frame 函数的测试"""
 
-    @patch('utils.video_utils.CompositeVideoClip')
+    @patch('genvideo.utils.video_utils.CompositeVideoClip')
     def test_create_centered_frame_basic(self, mock_composite):
         """测试基本的居中视频帧创建"""
         mock_clip = MagicMock()
@@ -193,7 +193,7 @@ class TestCreateCenteredVideoFrame:
         ]
 
         for width, height in test_cases:
-            with patch('utils.video_utils.CompositeVideoClip') as mock_composite:
+            with patch('genvideo.utils.video_utils.CompositeVideoClip') as mock_composite:
                 video_size = (width, height)
                 create_centered_video_frame(mock_clip, video_size)
                 mock_composite.assert_called_once_with([mock_clip], size=video_size)

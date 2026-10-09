@@ -4,7 +4,7 @@
 """
 from dataclasses import dataclass
 from typing import Optional, List, Union
-from utils.media_utils import MediaItem, MediaType
+from genvideo.utils.media_utils import MediaItem, MediaType
 import random
 
 

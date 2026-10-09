@@ -21,9 +21,9 @@ from typing import Callable, Dict, Optional
 import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from config import parse_color
-from utils.subtitle_utils import find_default_font
-from utils.video_utils import fit_frame
+from genvideo.config import parse_color
+from genvideo.utils.subtitle_utils import find_default_font
+from genvideo.utils.video_utils import fit_frame
 
 # 布局注册表：名字 -> 布局函数
 LAYOUTS: Dict[str, Callable] = {}
@@ -236,16 +236,25 @@ def _fade_alpha_at(t):
     return 1.0
 
 
-def _apply_bottom_fade(hero, bg_rgb):
-    """给 hero 照片（RGB PIL 图）底部加渐隐，溶进纸色背景"""
+def _apply_fade(hero, bg_rgb, axis="vertical"):
+    """
+    给 hero 照片（RGB PIL 图）沿一条边加渐隐，溶进纸色背景。
+
+    axis:
+        "vertical"   — 从顶部（透明）到底部（纸色）纵向渐隐（竖屏照片带）
+        "horizontal" — 从左（透明）到右（纸色）横向渐隐（横屏照片带）
+    """
     arr = np.asarray(hero, dtype=np.uint8).astype(np.float32)
-    h = arr.shape[0]
-    if h <= 1:
+    n = arr.shape[0] if axis == "vertical" else arr.shape[1]
+    if n <= 1:
         return hero
-    ts = np.linspace(0.0, 1.0, h)
+    ts = np.linspace(0.0, 1.0, n)
     alphas = np.array([_fade_alpha_at(t) for t in ts], dtype=np.float32)
     bg = np.asarray(bg_rgb, dtype=np.float32)
-    arr = arr * (1.0 - alphas[:, None, None]) + bg[None, None, :] * alphas[:, None, None]
+    if axis == "vertical":
+        arr = arr * (1.0 - alphas[:, None, None]) + bg[None, None, :] * alphas[:, None, None]
+    else:
+        arr = arr * (1.0 - alphas[None, :, None]) + bg[None, None, :] * alphas[None, :, None]
     return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8))
 
 
@@ -264,14 +273,13 @@ def _draw_grid(odraw, width, height, options):
         odraw.line([(0, y), (width, y)], fill=color, width=1)
 
 
-def _draw_bg_title(odraw, width, height, title, options):
-    """画超大背景标题：水平居中、贴着照片区底边、超宽自动缩字号"""
-    hero_top = float(options.get("hero_top", 0.0))
-    hero_h = float(options.get("hero_h", 0.60))
-    hero_top_px = int(round(height * hero_top))
-    hero_h_px = max(1, int(round(height * hero_h)))
-    hero_h_px = min(hero_h_px, height - hero_top_px)
+def _draw_bg_title(odraw, width, height, title, options, landscape, photo_edge):
+    """
+    画超大背景标题，超宽自动缩字号。
 
+    竖屏：水平居中于全画幅、贴着照片区底边（photo_edge 为照片区底边 y）。
+    横屏：垂直居中、水平居中于照片区右侧的纸色区（photo_edge 为照片区右边界 x）。
+    """
     title_color = parse_color(options.get("title_color", "#1E252861"), 255) or (30, 37, 40, 97)
 
     base = options.get("title_size")
@@ -281,18 +289,32 @@ def _draw_bg_title(odraw, width, height, title, options):
 
     font_path = options.get("title_font") or _find_serif_font()
     font = _load_truetype(font_path, base)
+    title_max_width = float(options.get("title_max_width", 0.8))
 
-    max_w = width * float(options.get("title_max_width", 0.8))
-    size = base
-    while size > 12 and font.getlength(title) > max_w:
-        size -= 2
-        font = _load_truetype(font_path, size)
+    if landscape:
+        # 右侧纸色区：宽 = 画布宽 - 照片区右边界
+        content_w = max(1, width - int(photo_edge))
+        max_w = content_w * title_max_width
+        size = base
+        while size > 12 and font.getlength(title) > max_w:
+            size -= 2
+            font = _load_truetype(font_path, size)
+        text_w = font.getlength(title)
+        x = photo_edge + (content_w - text_w) / 2.0
+        y = (height - font.size) / 2.0
+    else:
+        max_w = width * title_max_width
+        size = base
+        while size > 12 and font.getlength(title) > max_w:
+            size -= 2
+            font = _load_truetype(font_path, size)
+        offset = int(round(height * (122 / 1920)))
+        top = int(photo_edge) - offset
+        text_w = font.getlength(title)
+        x = (width - text_w) / 2.0
+        y = top
 
-    offset = int(round(height * (122 / 1920)))
-    top = hero_top_px + hero_h_px - offset
-    text_w = font.getlength(title)
-    x = (width - text_w) / 2.0
-    odraw.text((x, top), title, font=font, fill=title_color)
+    odraw.text((x, y), title, font=font, fill=title_color)
 
 
 def _draw_corner_marks(odraw, width, height, options):
@@ -321,18 +343,22 @@ def _draw_corner_marks(odraw, width, height, options):
 @register_layout("hero")
 def hero_layout(source, video_size, duration, options=None):
     """
-    杂志封面风：顶部全幅主视觉照片 + 下沿渐隐到纸色 + 网格纹理 +
-    超大背景标题 + 四角标记。
+    杂志封面风：满幅主视觉照片 + 渐隐到纸色 + 网格纹理 + 超大背景标题 + 四角标记。
 
     与 ``card`` 的关键区别：照片不放进圆角卡片（无留边、无圆角、无阴影），
-    而是满幅通栏铺开，底边渐隐溶进纸色背景。
+    而是满幅通栏铺开，沿一条边渐隐溶进纸色背景。
+
+    自动适配横竖屏：
+        竖屏（height >= width）：顶部通栏照片带，下沿渐隐，标题贴照片底边；
+        横屏（width > height）：左侧通栏照片带，右沿渐隐，标题在右侧纸色区。
 
     options:
         bg_color (str): 纸色背景（默认 "#EDF2F4"）
-        hero_top (float): 照片区顶边，占画布高度比例（默认 0.0）
-        hero_h (float): 照片区高度，占画布高度比例（默认 0.60）
-        hero_position (str): 照片裁剪位置（默认 "top"）
-        fade (bool): 是否给照片下沿加渐隐（默认 True）
+        hero_top (float): 竖屏照片区顶边，占画布高度比例（默认 0.0）
+        hero_h (float): 竖屏照片区高度，占画布高度比例（默认 0.60）
+        hero_w (float): 横屏照片区宽度，占画布宽度比例（默认 0.60）
+        hero_position (str): 照片裁剪位置（竖屏默认 "top"，横屏默认 "left"）
+        fade (bool): 是否给照片下沿/右沿加渐隐（默认 True）
         grid (bool): 是否叠加网格纹理（默认 True）
         grid_size (int): 网格单元格边长（像素，None 时按宽度自适应）
         grid_color / grid_alpha: 网格线颜色与透明度
@@ -342,7 +368,7 @@ def hero_layout(source, video_size, duration, options=None):
         title_size (int): 基准字号（None 时按高度自适应，1080x1920 下 ≈340）
         title_color (str): 标题颜色（默认半透明冷墨 "#1E252861"）
         title_font (str): 标题字体路径（None 时自动找宋体）
-        title_max_width (float): 标题最大宽度占画布比例，超出自动缩字号
+        title_max_width (float): 标题最大宽度占（照片区外的）纸色区比例，超出自动缩字号
     """
     options = options or {}
     frame = _render_hero_frame(source, video_size, options)
@@ -350,7 +376,7 @@ def hero_layout(source, video_size, duration, options=None):
 
 
 def _render_hero_frame(source, video_size, options) -> np.ndarray:
-    """渲染一张静态 hero 帧（纸底 + 全幅照片 + 渐隐 + 网格 + 标题 + 角标）"""
+    """渲染一张静态 hero 帧（纸底 + 满幅照片 + 渐隐 + 网格 + 标题 + 角标）"""
     width, height = int(video_size[0]), int(video_size[1])
 
     bg = parse_color(options.get("bg_color", "#EDF2F4"), 255) or (237, 242, 244, 255)
@@ -359,18 +385,34 @@ def _render_hero_frame(source, video_size, options) -> np.ndarray:
     # 1) 纸色画布
     canvas = Image.new("RGB", (width, height), bg_rgb)
 
-    # 2) 全幅照片（hero）：覆盖式裁剪到顶部通栏区域
-    hero_top = float(options.get("hero_top", 0.0))
-    hero_h = float(options.get("hero_h", 0.60))
-    hero_top_px = int(round(height * hero_top))
-    hero_h_px = max(1, int(round(height * hero_h)))
-    hero_h_px = min(hero_h_px, height - hero_top_px)
-    if hero_h_px > 0:
-        hero_position = options.get("hero_position", "top")
-        hero = Image.fromarray(fit_frame(source, (width, hero_h_px), position=hero_position))
+    # 2) 满幅照片（hero）：按横竖屏选择照片带方向
+    landscape = width > height
+    if landscape:
+        # 横屏：左侧垂直通栏，右沿渐隐
+        hero_w = float(options.get("hero_w", 0.60))
+        hero_left_px = 0
+        hero_w_px = max(1, int(round(width * hero_w)))
+        hero_w_px = min(hero_w_px, width)
+        hero_position = options.get("hero_position") or "left"
+        hero = Image.fromarray(fit_frame(source, (hero_w_px, height), position=hero_position))
         if options.get("fade", True):
-            hero = _apply_bottom_fade(hero, bg_rgb)
-        canvas.paste(hero, (0, hero_top_px))
+            hero = _apply_fade(hero, bg_rgb, axis="horizontal")
+        canvas.paste(hero, (hero_left_px, 0))
+        photo_edge = hero_left_px + hero_w_px  # 照片区右边界
+    else:
+        # 竖屏：顶部水平通栏，下沿渐隐
+        hero_top = float(options.get("hero_top", 0.0))
+        hero_h = float(options.get("hero_h", 0.60))
+        hero_top_px = int(round(height * hero_top))
+        hero_h_px = max(1, int(round(height * hero_h)))
+        hero_h_px = min(hero_h_px, height - hero_top_px)
+        hero_position = options.get("hero_position") or "top"
+        if hero_h_px > 0:
+            hero = Image.fromarray(fit_frame(source, (width, hero_h_px), position=hero_position))
+            if options.get("fade", True):
+                hero = _apply_fade(hero, bg_rgb, axis="vertical")
+            canvas.paste(hero, (0, hero_top_px))
+        photo_edge = hero_top_px + hero_h_px  # 照片区底边
 
     # 3) 半透明覆盖层：网格 + 大标题 + 四角标记（都压在照片与纸色之上）
     overlay = Image.new("RGBA", (width, height), (0, 0, 0, 0))
@@ -379,7 +421,7 @@ def _render_hero_frame(source, video_size, options) -> np.ndarray:
         _draw_grid(odraw, width, height, options)
     title = str(options.get("title") or "").strip()
     if title:
-        _draw_bg_title(odraw, width, height, title, options)
+        _draw_bg_title(odraw, width, height, title, options, landscape, photo_edge)
     if options.get("marks", True):
         _draw_corner_marks(odraw, width, height, options)
 

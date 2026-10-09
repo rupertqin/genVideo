@@ -6,7 +6,7 @@ import pytest
 from unittest.mock import patch
 from moviepy import ImageClip, VideoClip
 
-from utils.animation_utils import (
+from genvideo.utils.animation_utils import (
     EasingCurve,
     AnimationConfig,
     apply_animation,

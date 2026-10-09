@@ -5,7 +5,7 @@ import os
 
 import pytest
 
-from utils.media_utils import (
+from genvideo.utils.media_utils import (
     AUDIO_FILENAMES,
     ensure_parent_dir,
     find_audio_in,

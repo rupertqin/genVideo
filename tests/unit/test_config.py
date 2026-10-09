@@ -4,7 +4,7 @@ config.py 模块的单元测试 - 修复版本
 import os
 
 import pytest
-from config import (
+from genvideo.config import (
     DEFAULT_CONFIG,
     VideoSize,
     default_config_path,
