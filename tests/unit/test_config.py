@@ -366,6 +366,7 @@ class TestSubtitleOptions:
         assert options["max_width_ratio"] == pytest.approx(0.9)
         assert options["line_spacing"] == pytest.approx(1.25)
         assert options["stroke_width"] == 3
+        assert options["strip_punct"] is False
         assert options["text_color"] == (255, 255, 255, 255)
         assert options["box_color"] == (0, 0, 0, 150)
 
@@ -379,6 +380,7 @@ class TestSubtitleOptions:
             "  max_width: 0.8\n"
             "  line_spacing: 1.4\n"
             "  stroke_width: 5\n"
+            "  strip_punct: true\n"
             "  text_color: '#FFCC00'\n"
             "  box_color: [0, 0, 0]\n"
             "  box_alpha: 0\n",
@@ -391,6 +393,7 @@ class TestSubtitleOptions:
         assert options["max_width_ratio"] == pytest.approx(0.8)
         assert options["line_spacing"] == pytest.approx(1.4)
         assert options["stroke_width"] == 5
+        assert options["strip_punct"] is True
         assert options["text_color"] == (255, 204, 0, 255)
         assert options["box_color"] == (0, 0, 0, 0)
 
@@ -399,11 +402,12 @@ class TestSubtitleOptions:
         options = subtitle_options({"subtitle": {"size": 32}})
         assert options["font_size"] == 32
         assert options["box_color"] == (0, 0, 0, 150)
+        assert options["strip_punct"] is False
 
     def test_output_is_render_kwargs(self):
         """返回的键名与 render_subtitle_frame 的参数一致"""
         options = subtitle_options(None)
         assert set(options) == {
             "font_path", "font_size", "bottom_ratio", "max_width_ratio",
-            "line_spacing", "stroke_width", "text_color", "box_color",
+            "line_spacing", "stroke_width", "strip_punct", "text_color", "box_color",
         }

@@ -27,6 +27,7 @@ from utils.subtitle_utils import (
     find_subtitle_path,
     format_timestamp,
     load_subtitles,
+    normalize_punctuation,
     render_subtitle_frame,
 )
 
@@ -290,6 +291,42 @@ class TestRenderSubtitleFrame:
         """底色 alpha 为 0 时不画底色"""
         frame = render_subtitle_frame("字幕", (640, 360), box_color=(0, 0, 0, 0))
         assert (frame[..., 3] > 0).sum() > 0
+
+    def test_strip_punct_still_renders(self):
+        """strip_punct=True 时正常渲染且有内容"""
+        frame = render_subtitle_frame("你好，世界。", (640, 360), strip_punct=True)
+        assert frame.shape == (360, 640, 4)
+        assert (frame[..., 3] > 0).sum() > 0
+
+
+class TestNormalizePunctuation:
+    """normalize_punctuation 函数的测试"""
+
+    @pytest.mark.parametrize(
+        "text,expected",
+        [
+            ("你好。", "你好"),                      # 句尾句号删除
+            ("你好，", "你好"),                      # 句尾逗号删除
+            ("你好，世界", "你好 世界"),             # 句中逗号 -> 空格
+            ("你好，世界。", "你好 世界"),           # 句中逗号 + 句尾句号
+            ("大家好，我们现在开始。", "大家好 我们现在开始"),
+            ("这个公式是什么呢？60比40", "这个公式是什么呢？60比40"),  # 问号保留
+            ("你好！", "你好！"),                    # 感叹号保留
+            ("a,b.c", "a b c"),                     # 英文逗号句号
+            ("好.吧", "好 吧"),
+            ("  你好， 世界。 ", "你好 世界"),       # 空白一并归一
+            ("", ""),
+            ("就到这里", "就到这里"),
+        ],
+    )
+    def test_normalize(self, text, expected):
+        """逗号/句号：句尾删除、句中替换为空格；其余标点保留"""
+        assert normalize_punctuation(text) == expected
+
+    def test_only_comma_and_period_affected(self):
+        """分号/冒号/问号/感叹号一律不动"""
+        text = "你好；这个：怎么样？！"
+        assert normalize_punctuation(text) == text
 
 
 class _FakeVideoClip:

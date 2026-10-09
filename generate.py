@@ -2,7 +2,7 @@
 视频生成主脚本
 使用 moviepy 创建图片和视频混合轮播视频，支持音频配合和过渡效果
 """
-from moviepy import ImageClip, VideoFileClip, AudioFileClip, concatenate_videoclips
+from moviepy import ImageClip, VideoFileClip, AudioFileClip, VideoClip, concatenate_videoclips
 from moviepy.video.fx import FadeIn, FadeOut
 import os
 import argparse
@@ -16,7 +16,7 @@ from utils.media_utils import (
     MediaType,
 )
 from utils.slideshow_utils import SlideshowController
-from utils.video_utils import resize_and_position_image, resize_and_position_video
+from utils.video_utils import resize_and_position_video
 from utils.animation_utils import AnimationConfig, apply_animation, get_random_animation_config
 from utils.subtitle_utils import (
     load_subtitles,
@@ -25,6 +25,7 @@ from utils.subtitle_utils import (
     find_subtitle_path,
     format_timestamp,
 )
+from utils.layouts import get_layout, list_layouts
 from config import (
     VideoSize,
     parse_video_size,
@@ -101,7 +102,8 @@ def create_slideshow(media_items, audio_path, output_path,
                      animation_config=None, random_animation=False,
                      subtitle_path=None, subtitle_options=None,
                      encoder=DEFAULT_VIDEO["encoder"], preset=DEFAULT_PRESET,
-                     bitrate=DEFAULT_VIDEO["bitrate"]):
+                     bitrate=DEFAULT_VIDEO["bitrate"],
+                     layout_name="fullscreen", layout_options=None):
     """
     创建新版 MoviePy 的混合媒体轮播视频
 
@@ -178,12 +180,17 @@ def create_slideshow(media_items, audio_path, output_path,
             raise FileNotFoundError(f"媒体文件不存在: {media_item.path}")
 
         if media_item.media_type == MediaType.IMAGE:
-            clip = ImageClip(media_item.path, duration=duration)
+            image_clip = ImageClip(media_item.path, duration=duration)
             anim_config = get_random_animation_config() if random_animation else animation_config
-            if anim_config is not None and anim_config.animation_type != AnimationConfig.NONE:
-                clip = apply_animation(clip, anim_config, stage_size)
+            if (layout_name == "fullscreen"
+                    and anim_config is not None
+                    and anim_config.animation_type != AnimationConfig.NONE):
+                clip = apply_animation(image_clip, anim_config, stage_size)
             else:
-                clip = resize_and_position_image(clip, stage_size, position="center")
+                layout_fn = get_layout(layout_name)
+                frame_func = layout_fn(image_clip.get_frame(0), stage_size, duration, layout_options)
+                clip = VideoClip(frame_func, duration=duration)
+                clip.size = stage_size
 
         else:
             print(f"  [视频] 直接播放，不应用动画")
@@ -305,6 +312,9 @@ if __name__ == "__main__":
                         help='为图片启用随机缩放/平移动画（会降低编码速度）')
     parser.add_argument('--no-animation', dest='animation', action='store_false',
                         help='不启用动画效果')
+    parser.add_argument('--layout', default=video_cfg["layout"],
+                        help='画面布局组件：fullscreen | card'
+                             f' (config.yaml: video.layout = {video_cfg["layout"]})')
     parser.add_argument('--encoder', default=video_cfg["encoder"],
                         help='视频编码器: libx264 | h264_videotoolbox | h264_nvenc | ... | auto'
                              f' (config.yaml: {video_cfg["encoder"]})')
@@ -413,6 +423,16 @@ if __name__ == "__main__":
         bottom_ratio=args.subtitle_bottom,
     )
 
+    # 画面布局组件：config.yaml 的 video.layout 选择，命令行可覆盖
+    LAYOUT_NAME = args.layout or video_cfg.get("layout", "fullscreen")
+    if get_layout(LAYOUT_NAME) is None:
+        print(f"错误: 未知布局 `{LAYOUT_NAME}`（可用: {', '.join(list_layouts())}）")
+        raise SystemExit(1)
+    LAYOUT_OPTIONS = dict(CFG.get("layout", {}).get(LAYOUT_NAME, {}) or {})
+    # card 布局的标题：未显式配置时，自动用音频文件名（去扩展名）
+    if LAYOUT_NAME == "card" and not LAYOUT_OPTIONS.get("title"):
+        LAYOUT_OPTIONS["title"] = os.path.splitext(os.path.basename(AUDIO_PATH))[0]
+
     ENCODER = args.encoder
     if ENCODER == 'auto':
         detected = detect_hardware_encoder()
@@ -452,6 +472,7 @@ if __name__ == "__main__":
         f"{format_timestamp(DURATION, sep='.')}  ({DURATION:g} 秒)" if DURATION else "完整音频"))
     print(f"  过渡时长: {args.transition} 秒")
     print(f"  动画效果: {'启用（随机）' if random_animation else '禁用'}")
+    print(f"  画面布局: {LAYOUT_NAME}")
     if SUBTITLE_PATH:
         print(f"  字幕文件: {SUBTITLE_PATH}")
     elif args.subtitles_enabled:
@@ -487,6 +508,8 @@ if __name__ == "__main__":
         random_animation=random_animation,
         subtitle_path=SUBTITLE_PATH,
         subtitle_options=SUBTITLE_OPTIONS,
+        layout_name=LAYOUT_NAME,
+        layout_options=LAYOUT_OPTIONS,
         encoder=ENCODER,
         preset=args.preset,
         bitrate=args.bitrate,

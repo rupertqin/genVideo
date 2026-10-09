@@ -3,6 +3,17 @@
 # 优先级：命令行参数 > 本文件 > 代码内置默认值
 # 即：这里配的是默认值，命令行仍可临时覆盖（例如 --subtitle-size 48）。
 
+media:
+  images: assets/images            # 图片目录
+  videos: null                     # 视频目录（可选；图片与视频会混在一起轮播）
+  dir: null                        # 混合目录（图片+视频放一起）；设置后忽略上面两项
+
+  # 音频：写完整文件路径（也可以只写目录，程序会在目录里找 audio.wav / audio.mp3）
+  audio: assets/audio/017、第14节：资产配置的真正含义.mp4
+
+  # 输出：默认放到 output/ 目录（目录不存在会自动创建）
+  output: output/generated.mp4
+
 video:
   size: PORTRAIT_1080P          # 尺寸预设（HD_720P / HD_1080P / PORTRAIT_1080P ...）或 "1280x720"
   fps: 24                # 帧率；总帧数 = 时长 x fps，直接影响编码耗时
@@ -15,7 +26,7 @@ video:
   #   3:00                      -> 3 分 0 秒
   #   00:03:00                  -> 时:分:秒
   #   00:03:00.250              -> 精确到毫秒
-  duration: 00:03:00.250
+  duration: 00:01:00.250
   # duration: null
 
   transition: 1.0        # 媒体切换过渡时长（秒）
@@ -23,17 +34,24 @@ video:
   preset: veryfast       # 仅 libx264 生效：ultrafast ... medium ... veryslow
   bitrate: 5000k         # 视频码率（硬件编码器建议调高，如 12000k）
   animation: false       # 是否给图片加随机缩放/平移动画（会明显降低编码速度）
+  layout: fullscreen     # 画面布局组件：fullscreen（全屏铺满） | card（背景不铺满+标题）
 
-media:
-  images: assets/images            # 图片目录
-  videos: null                     # 视频目录（可选；图片与视频会混在一起轮播）
-  dir: null                        # 混合目录（图片+视频放一起）；设置后忽略上面两项
 
-  # 音频：写完整文件路径（也可以只写目录，程序会在目录里找 audio.wav / audio.mp3）
-  audio: assets/audio/017、第14节：资产配置的真正含义.mp4
+# ============ 画面布局（video.layout 选哪个就用哪段）============
+layout:
+  fullscreen:
+    position: center        # 裁剪位置：center / left / right / top / bottom
 
-  # 输出：默认放到 output/ 目录（目录不存在会自动创建）
-  output: output/generated.mp4
+  card:
+    inset: 0.07             # 卡片四周留白，占短边比例（0.07 = 7%）
+    radius: 40              # 卡片圆角半径（像素）
+    shadow: 24              # 卡片阴影模糊半径（像素；0 = 不画阴影）
+    background_blur: 24     # 背景高斯模糊半径（0 = 不模糊）
+    background_darken: 0.35 # 背景压暗强度 0~1（0 = 不压暗）
+    title: null             # 标题文字；null = 自动用音频文件名（去扩展名）
+    title_size: 60          # 标题字号（像素）
+    title_color: "#FFFFFF"  # 标题颜色："#RRGGBB" / [r, g, b]
+    title_position: top     # 标题在卡片 top（上方）/ bottom（下方）
 
 # ============ 字幕 ============
 subtitle:
@@ -51,6 +69,7 @@ subtitle:
   max_width: 0.9         # 单行最大宽度占视频宽度比例，超出自动折行
   line_spacing: 1.25     # 行距倍数
   stroke_width: 3        # 文字描边宽度（像素），保证浅色背景上也清晰
+  strip_punct: true      # 去掉逗号/句号：句尾直接删除，句中替换为空格（只影响渲染，不动 srt）
 
   text_color: "#FFFFFF"  # 文字颜色："#RRGGBB" / "#RRGGBBAA" / [r, g, b] / [r, g, b, a]
   box_color: [0, 0, 0]   # 文字底色："#RRGGBB" / [r, g, b]

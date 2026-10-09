@@ -439,6 +439,7 @@ video:
   preset: veryfast       # 仅 libx264 生效
   bitrate: 5000k
   animation: false       # 图片是否加随机缩放/平移动画
+  layout: fullscreen     # 画面布局组件：fullscreen | card
 
 media:
   images: assets/images            # 图片目录
@@ -490,6 +491,42 @@ python generate.py --subtitle-size 20      # 只改这一项，其余沿用 conf
 
 > `config.yaml` 解析失败会直接报错并指出文件路径（不会静默忽略你的配置）。
 > 读取它需要 `PyYAML`（已在 requirements.txt 中）。
+
+### 画面布局组件
+
+画面层是**可插拔的组件**，用 `video.layout` 切换（`--layout` 可临时覆盖）。
+内置两个，字幕是另一个独立组件，始终叠加在上面：
+
+| 组件 | 说明 |
+|---|---|
+| `fullscreen` | 全屏铺满：图片覆盖式缩放 + 居中裁剪（默认） |
+| `card` | 卡片式：背景模糊压暗铺满 + 前景留边圆角卡片（不铺满）+ 标题 |
+
+```yaml
+video:
+  layout: card           # fullscreen | card
+
+layout:
+  card:
+    inset: 0.07             # 卡片四周留白（占短边比例）
+    radius: 40              # 圆角半径（像素）
+    shadow: 24              # 阴影模糊半径（0 = 不画）
+    background_blur: 24     # 背景模糊半径（0 = 不模糊）
+    background_darken: 0.35 # 背景压暗强度 0~1
+    title: null             # 标题；null = 自动用音频文件名（去扩展名）
+    title_size: 60
+    title_color: "#FFFFFF"
+    title_position: top     # top | bottom
+```
+
+```bash
+# 标题不写时自动取音频文件名，例如「017、第14节：资产配置的真正含义」
+python generate.py --layout card
+```
+
+**新增一个组件**：在 `utils/layouts.py` 里写一个函数（签名
+`fn(source_image, video_size, duration, options) -> frame(t)`），用
+`@register_layout("名字")` 注册即可，随后 `video.layout: 名字` 就能用。
 
 ### VideoSize 预设类
 
@@ -546,6 +583,7 @@ genVideo/
 │   ├── image_utils.py    # 图片处理工具（兼容旧版）
 │   ├── video_utils.py    # 视频处理工具
 │   ├── subtitle_utils.py # 字幕解析与渲染
+│   ├── layouts.py        # 画面布局组件（fullscreen / card，可插拔）
 │   ├── slideshow_utils.py # 轮播控制器
 │   └── animation_utils.py # 动画效果工具
 ├── tests/                # 测试目录

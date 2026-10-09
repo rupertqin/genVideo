@@ -245,6 +245,21 @@ def find_default_font() -> Optional[str]:
     return None
 
 
+# 需要处理的标点：逗号和句号（含中英文），其余（？ ！ 等）保留
+PUNCT_COMMA_PERIOD = "，,。."
+
+
+def normalize_punctuation(text: str) -> str:
+    """
+    把逗号/句号替换为空格：句尾的因此被删掉，句中的变成空格。
+
+    只处理 ``，`` ``。`` ``,`` ``.`` 四个字符，问号/感叹号等保留。
+    """
+    for char in PUNCT_COMMA_PERIOD:
+        text = text.replace(char, " ")
+    return " ".join(text.split()).strip()
+
+
 def _wrap_text(text: str, font, max_width: float) -> List[str]:
     """
     按像素宽度把文本折行（中文按字符折，英文按整词尽力折）。
@@ -275,6 +290,7 @@ def render_subtitle_frame(
     max_width_ratio: float = 0.9,
     line_spacing: float = 1.25,
     stroke_width: int = 3,
+    strip_punct: bool = False,
     text_color: Tuple[int, int, int, int] = (255, 255, 255, 255),
     box_color: Tuple[int, int, int, int] = (0, 0, 0, 150),
 ) -> np.ndarray:
@@ -290,6 +306,7 @@ def render_subtitle_frame(
         max_width_ratio (float): 单行最大宽度占视频宽度的比例
         line_spacing (float): 行距倍数
         stroke_width (int): 文字描边宽度
+        strip_punct (bool): 去掉逗号/句号（句尾删除、句中替换为空格）
         text_color (tuple): 文字颜色 RGBA
         box_color (tuple): 文字底色 RGBA（alpha 为 0 时不画底色）
 
@@ -302,6 +319,8 @@ def render_subtitle_frame(
     frame = Image.new("RGBA", (width, height), (0, 0, 0, 0))
 
     text = (text or "").strip()
+    if strip_punct:
+        text = normalize_punctuation(text)
     if not text:
         return np.asarray(frame, dtype=np.uint8)
 

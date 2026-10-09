@@ -157,6 +157,7 @@ DEFAULT_CONFIG = {
         "preset": "veryfast",
         "bitrate": "5000k",
         "animation": False,
+        "layout": "fullscreen",
     },
     "media": {
         "images": "assets/images",
@@ -164,6 +165,20 @@ DEFAULT_CONFIG = {
         "dir": None,
         "audio": "assets/audio/audio.wav",
         "output": "output/generated.mp4",
+    },
+    "layout": {
+        "fullscreen": {"position": "center"},
+        "card": {
+            "inset": 0.07,
+            "radius": 40,
+            "shadow": 24,
+            "background_blur": 24,
+            "background_darken": 0.35,
+            "title": None,
+            "title_size": 60,
+            "title_color": "#FFFFFF",
+            "title_position": "top",
+        },
     },
     "subtitle": {
         "enabled": True,
@@ -174,6 +189,7 @@ DEFAULT_CONFIG = {
         "max_width": 0.9,
         "line_spacing": 1.25,
         "stroke_width": 3,
+        "strip_punct": False,
         "text_color": "#FFFFFF",
         "box_color": [0, 0, 0],
         "box_alpha": 150,
@@ -354,7 +370,7 @@ def subtitle_options(config=None):
 
     返回:
         dict: 含 font_path / font_size / bottom_ratio / max_width_ratio /
-              line_spacing / stroke_width / text_color / box_color
+              line_spacing / stroke_width / strip_punct / text_color / box_color
     """
     section = merge_config(DEFAULT_CONFIG["subtitle"], (config or {}).get("subtitle", {}))
 
@@ -366,6 +382,7 @@ def subtitle_options(config=None):
         "max_width_ratio": float(section.get("max_width", 0.9)),
         "line_spacing": float(section.get("line_spacing", 1.25)),
         "stroke_width": int(section.get("stroke_width", 3)),
+        "strip_punct": bool(section.get("strip_punct", False)),
         "text_color": parse_color(section.get("text_color"), 255),
         "box_color": parse_color(section.get("box_color"), section.get("box_alpha", 150)),
     }
